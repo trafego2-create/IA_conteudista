@@ -2,3 +2,5 @@ openai
 supabase
 python-dotenv
 pypdf
+fastapi
+uvicorn[standard]

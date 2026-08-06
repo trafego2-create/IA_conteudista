@@ -10,7 +10,8 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 from core import (  # noqa: E402
     PRODUTOS, DecisaoInvalida, EstoqueInsuficiente, MaterialNaoEncontrado, ProdutoInvalido,
-    QuestaoNaoEncontrada, gerar_lote, gerar_questao, get_openai, revisar_questao, sortear_simulado,
+    QuestaoNaoEncontrada, gerar_lote, gerar_questao, get_openai, listar_materias, revisar_questao,
+    sortear_simulado, sortear_simulado_estratificado,
 )
 
 app = FastAPI(title='Aprova Sim - IA Conteudista')
@@ -28,6 +29,11 @@ Regras de negócio importantes, explique ao usuário quando relevante:
   por revisão humana. Se a ferramenta falhar por falta de estoque aprovado suficiente, não existe
   fallback gerando questões novas para simulado - explique isso e sugira gerar mais questões
   Mestre em Questões primeiro (que depois de revisadas e aprovadas entram no estoque de simulados).
+- Se o usuário pedir um simulado com quantidade por matéria (ex.: "3 de Português, 1 de Redação..."),
+  use o parâmetro distribuicao da ferramenta montar_simulado em vez do parâmetro quantidade solto.
+  ANTES de montar a distribuicao, sempre chame listar_materias pra pegar a grafia exata das
+  matérias daquele concurso no banco (nomes como "RLM" não são óbvios a partir do pedido do
+  usuário, e maiúscula/minúscula ou variações de escrita podem não bater).
 - Questões geradas por IA (Mestre em Questões, Revisão Farol) sempre nascem como pendentes de
   revisão humana - nenhuma vai ao aluno antes de alguém aprovar.
 """
@@ -60,19 +66,50 @@ TOOLS = [
     {
         'type': 'function',
         'function': {
-            'name': 'montar_simulado',
+            'name': 'listar_materias',
             'description': (
-                'Monta um simulado de N questões sorteando do banco de questões JÁ aprovadas '
-                'por revisão humana para o concurso. Não usa IA. Falha se não houver questões '
-                'aprovadas suficientes no banco.'
+                'Lista os nomes de matéria (grafia exata salva no banco) que têm questões '
+                'aprovadas para o concurso. Chamar antes de montar_simulado com distribuicao, '
+                'pra usar os nomes certos.'
             ),
             'parameters': {
                 'type': 'object',
                 'properties': {
                     'concurso': {'type': 'string'},
-                    'quantidade': {'type': 'integer'},
                 },
-                'required': ['concurso', 'quantidade'],
+                'required': ['concurso'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
+            'name': 'montar_simulado',
+            'description': (
+                'Monta um simulado sorteando do banco de questões JÁ aprovadas por revisão '
+                'humana para o concurso. Não usa IA. Falha se não houver questões aprovadas '
+                'suficientes no banco (avisa exatamente onde falta estoque). Use quantidade '
+                'para um total solto (sem distinção de matéria) OU distribuicao para pedir uma '
+                'quantidade especifica por matéria - nunca os dois juntos.'
+            ),
+            'parameters': {
+                'type': 'object',
+                'properties': {
+                    'concurso': {'type': 'string'},
+                    'quantidade': {
+                        'type': 'integer',
+                        'description': 'Total de questões, sem distinção de matéria. Omitir se usar distribuicao.',
+                    },
+                    'distribuicao': {
+                        'type': 'object',
+                        'additionalProperties': {'type': 'integer'},
+                        'description': (
+                            'Quantidade de questões por matéria, ex.: {"Português": 3, "Redação Oficial": 1}. '
+                            'Usar quando o pedido especificar quantidade por matéria. Omitir se usar quantidade.'
+                        ),
+                    },
+                },
+                'required': ['concurso'],
             },
         },
     },
@@ -88,8 +125,12 @@ def executar_ferramenta(nome: str, argumentos: dict) -> dict:
             )
         except (MaterialNaoEncontrado, ProdutoInvalido) as e:
             return {'erro': str(e)}
+    if nome == 'listar_materias':
+        return {'materias': listar_materias(argumentos['concurso'])}
     if nome == 'montar_simulado':
         try:
+            if argumentos.get('distribuicao'):
+                return sortear_simulado_estratificado(argumentos['concurso'], argumentos['distribuicao'])
             return sortear_simulado(argumentos['concurso'], argumentos['quantidade'])
         except EstoqueInsuficiente as e:
             return {'erro': str(e)}

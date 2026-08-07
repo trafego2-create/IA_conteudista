@@ -98,8 +98,24 @@ QUESTAO_COMENTARIO_RE = re.compile(
     r'QUEST[AÃ]O\s*0*(\d+)\s*\n\s*COMENT[AÁ]RIO\s*:\s*(.*?)\n\s*Gabarito\s*:\s*([^\n]+)',
     re.IGNORECASE | re.DOTALL,
 )
-ALTERNATIVA_LINHA_RE = re.compile(r'^([A-E])\)\s*(.*)$')
+ALTERNATIVA_MARCADOR_RE = re.compile(r'^([A-E])\)\s*', re.MULTILINE)
 CERTO_ERRADO_RE = re.compile(r'\(\s*\)\s*Certo', re.IGNORECASE)
+
+
+def extrair_alternativas(bloco):
+    """Cada alternativa vai de um marcador 'X)' ate o proximo (ou ate o fim do bloco) -
+    nao ate o fim da LINHA. Alternativas reais quase sempre quebram em varias linhas no
+    PDF (paragrafos inteiros, as vezes quase identicos de proposito, pegadinha classica de
+    banca) - pegar so a primeira linha truncava o texto de cada opcao no meio da frase."""
+    marcadores = list(ALTERNATIVA_MARCADOR_RE.finditer(bloco))
+    if len(marcadores) < 3:
+        return None, None
+    alternativas = {}
+    for i, m in enumerate(marcadores):
+        letra = m.group(1)
+        fim = marcadores[i + 1].start() if i + 1 < len(marcadores) else len(bloco)
+        alternativas[letra] = norm(bloco[m.end():fim])
+    return marcadores[0].start(), alternativas
 
 
 def parse_enunciados(body):
@@ -114,21 +130,13 @@ def parse_enunciados(body):
         bloco = body[start:end]
 
         formato = None
-        alternativas = None
         enunciado = bloco
 
-        alt_lines = []
-        for line in bloco.splitlines():
-            am = ALTERNATIVA_LINHA_RE.match(line.strip())
-            if am:
-                alt_lines.append(am)
-
+        primeira_pos, alternativas = extrair_alternativas(bloco)
         ce_match = CERTO_ERRADO_RE.search(bloco)
-        if len(alt_lines) >= 3:
+        if alternativas:
             formato = 'abcde'
-            primeira_pos = bloco.find(alt_lines[0].group(0).strip())
             enunciado = bloco[:primeira_pos]
-            alternativas = {am.group(1): norm(am.group(2)) for am in alt_lines}
         elif ce_match:
             formato = 'certo_errado'
             enunciado = bloco[:ce_match.start()]

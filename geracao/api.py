@@ -108,6 +108,15 @@ TOOLS = [
                             'Usar quando o pedido especificar quantidade por matéria. Omitir se usar quantidade.'
                         ),
                     },
+                    'formato': {
+                        'type': 'string',
+                        'enum': ['certo_errado', 'abcde'],
+                        'description': (
+                            'Restringe o simulado a um único formato de questão. Usar sempre que o pedido '
+                            'mencionar o modelo (ex.: "Certo/Errado", "múltipla escolha") - sem isso o '
+                            'sorteio mistura os dois formatos aprovados para a mesma matéria.'
+                        ),
+                    },
                 },
                 'required': ['concurso'],
             },
@@ -129,9 +138,10 @@ def executar_ferramenta(nome: str, argumentos: dict) -> dict:
         return {'materias': listar_materias(argumentos['concurso'])}
     if nome == 'montar_simulado':
         try:
+            formato = argumentos.get('formato')
             if argumentos.get('distribuicao'):
-                return sortear_simulado_estratificado(argumentos['concurso'], argumentos['distribuicao'])
-            return sortear_simulado(argumentos['concurso'], argumentos['quantidade'])
+                return sortear_simulado_estratificado(argumentos['concurso'], argumentos['distribuicao'], formato)
+            return sortear_simulado(argumentos['concurso'], argumentos['quantidade'], formato)
         except EstoqueInsuficiente as e:
             return {'erro': str(e)}
     return {'erro': f'ferramenta desconhecida: {nome}'}

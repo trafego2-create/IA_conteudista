@@ -305,13 +305,15 @@ def _prioridade_reuso(questao: dict):
     return (len(usos), max(usos) if usos else '')
 
 
-def _candidatas_aprovadas(supabase, concurso: str, materia: str = None) -> list:
+def _candidatas_aprovadas(supabase, concurso: str, materia: str = None, formato: str = None) -> list:
     consulta = supabase.table('questoes').select('*').eq('concurso', concurso).eq('status', 'aprovada')
     if materia:
         # ilike sem coringa = igualdade ignorando maiuscula/minuscula - o nome da materia
         # digitado em linguagem natural (ex.: "direito constitucional") raramente bate
         # exatamente a grafia salva no banco (ex.: "Direito Constitucional")
         consulta = consulta.ilike('materia', materia)
+    if formato:
+        consulta = consulta.eq('formato', formato)
     candidatas = consulta.execute().data
     candidatas.sort(key=_prioridade_reuso)
     return candidatas
@@ -340,17 +342,21 @@ def _marcar_usadas(supabase, selecionadas: list) -> None:
         supabase.table('questoes').update({'usada_em': novo_usada_em}).eq('id', questao['id']).execute()
 
 
-def sortear_simulado(concurso: str, quantidade: int) -> dict:
+def sortear_simulado(concurso: str, quantidade: int, formato: str = None) -> dict:
     """Monta um simulado sorteando questoes JA aprovadas do banco. Sem IA - se nao houver
     estoque aprovado suficiente, falha (nao existe fallback gerando questoes novas para
-    simulado, e regra de negocio). Prioriza questoes nunca usadas ou usadas ha mais tempo."""
+    simulado, e regra de negocio). Prioriza questoes nunca usadas ou usadas ha mais tempo.
+    formato (opcional) restringe a 'certo_errado' ou 'abcde' - sem isso o sorteio mistura os
+    dois formatos aprovados pra mesma materia, o que nao e o que o usuario pede na pratica
+    quando fala em "modelo Certo/Errado" ou "multipla escolha"."""
     supabase = get_supabase()
 
-    candidatas = _candidatas_aprovadas(supabase, concurso)
+    candidatas = _candidatas_aprovadas(supabase, concurso, formato=formato)
     if len(candidatas) < quantidade:
         raise EstoqueInsuficiente(
             f'apenas {len(candidatas)} questoes aprovadas para concurso={concurso!r} '
-            f'(pedido de {quantidade}) - simulado nunca usa IA, so reaproveitamento do banco'
+            f'formato={formato!r} (pedido de {quantidade}) - simulado nunca usa IA, so '
+            f'reaproveitamento do banco'
         )
 
     selecionadas = candidatas[:quantidade]
@@ -363,18 +369,19 @@ def sortear_simulado(concurso: str, quantidade: int) -> dict:
     }
 
 
-def sortear_simulado_estratificado(concurso: str, distribuicao: dict) -> dict:
+def sortear_simulado_estratificado(concurso: str, distribuicao: dict, formato: str = None) -> dict:
     """Igual sortear_simulado, mas com quantidade fixa por materia (ex.: {'Português': 3,
     'Redação Oficial': 1, ...}), pra atender pedidos de simulado com proporcao definida por
     materia em vez de so um total solto. Confere o estoque de TODAS as materias pedidas antes
     de marcar qualquer questao como usada - ou monta o simulado inteiro, ou nao mexe em nada
-    (evita gastar estoque de materias que tinham saldo enquanto outra materia falha)."""
+    (evita gastar estoque de materias que tinham saldo enquanto outra materia falha). formato
+    (opcional) restringe a 'certo_errado' ou 'abcde', aplicado igual em todas as materias."""
     supabase = get_supabase()
 
     candidatas_por_materia = {}
     faltando = []
     for materia, quantidade in distribuicao.items():
-        candidatas = _candidatas_aprovadas(supabase, concurso, materia)
+        candidatas = _candidatas_aprovadas(supabase, concurso, materia, formato=formato)
         if len(candidatas) < quantidade:
             faltando.append({'materia': materia, 'pedido': quantidade, 'disponivel': len(candidatas)})
         candidatas_por_materia[materia] = candidatas
@@ -382,8 +389,8 @@ def sortear_simulado_estratificado(concurso: str, distribuicao: dict) -> dict:
     if faltando:
         detalhe = '; '.join(f"{f['materia']}: pedido {f['pedido']}, disponivel {f['disponivel']}" for f in faltando)
         raise EstoqueInsuficiente(
-            f'estoque aprovado insuficiente para concurso={concurso!r} nas materias: {detalhe} - '
-            f'simulado nunca usa IA, so reaproveitamento do banco'
+            f'estoque aprovado insuficiente para concurso={concurso!r} formato={formato!r} '
+            f'nas materias: {detalhe} - simulado nunca usa IA, so reaproveitamento do banco'
         )
 
     selecionadas = []

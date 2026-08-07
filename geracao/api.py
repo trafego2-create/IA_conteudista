@@ -36,6 +36,22 @@ Regras de negócio importantes, explique ao usuário quando relevante:
   usuário, e maiúscula/minúscula ou variações de escrita podem não bater).
 - Questões geradas por IA (Mestre em Questões, Revisão Farol) sempre nascem como pendentes de
   revisão humana - nenhuma vai ao aluno antes de alguém aprovar.
+
+Ao listar questões (de um simulado ou recém-geradas) na resposta, siga este formato exato pra
+cada questão, sem markdown/negrito e sem agrupar por matéria com cabeçalho - só numeração
+sequencial "01.", "02." etc:
+
+01. "<enunciado>"
+
+( ) Certo
+( ) Errado
+
+Comentário: <comentario>
+
+Gabarito: <Certo ou Errado>
+
+Pra questões de múltipla escolha (formato abcde), troca o bloco "( ) Certo / ( ) Errado" por
+uma alternativa por linha ("A) ...", "B) ...", etc) e o Gabarito é a letra correta.
 """
 
 TOOLS = [

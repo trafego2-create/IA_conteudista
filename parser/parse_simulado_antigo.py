@@ -1,11 +1,21 @@
 import pypdf, re, json, sys, hashlib, os
 
+try:
+    import docx
+except ImportError:
+    docx = None
+
 
 def norm(s):
     return re.sub(r'\s+', ' ', s).strip()
 
 
 def load_text(path):
+    if path.lower().endswith('.docx'):
+        if docx is None:
+            raise ImportError('python-docx nao instalado - necessario pra ler .docx')
+        documento = docx.Document(path)
+        return '\n'.join(p.text for p in documento.paragraphs)
     reader = pypdf.PdfReader(path)
     return '\n'.join((p.extract_text() or '') for p in reader.pages)
 
@@ -15,10 +25,17 @@ LEIA_TEXTO_RE = re.compile(
     r'Leia o texto.*?(?:quest(?:[oõ]es|[aã]o)|itens?)\s+(?:de\s+)?(\d+)\s*(?:a|e|[ea]\s+)\s*(\d+)',
     re.IGNORECASE | re.DOTALL,
 )
-ITEM_MARCADOR_RE = re.compile(r'^\s*0*(\d{1,3})\s*\.\s*', re.MULTILINE)
+ITEM_MARCADOR_RE = re.compile(
+    # duas formas aceitas: "QUESTAO NN (banca)" (usada em alguns .docx, sem ponto depois do
+    # numero) ou "NN." simples (formato mais comum). A pontuacao SO pode ser opcional quando
+    # o prefixo "QUESTAO" esta presente - deixar opcional pros dois casos faz qualquer numero
+    # solto no meio do enunciado (ex.: "150 minutos") virar falso marcador de item.
+    r'^\s*(?:QUEST[AÃ]O\s*0*(\d{1,3})\s*(?:\([^)]*\))?|0*(\d{1,3})\s*\.)\s*',
+    re.MULTILINE | re.IGNORECASE,
+)
 COMENTARIO_RE = re.compile(r'COMENT[AÁ]RIOS?\s*:\s*', re.IGNORECASE)
 GABARITO_RE = re.compile(r'GABARITO\s*:\s*([^\n]+)', re.IGNORECASE)
-ALTERNATIVA_MARCADOR_RE = re.compile(r'^([A-E])\)\s*', re.MULTILINE)
+ALTERNATIVA_MARCADOR_RE = re.compile(r'^\(?([A-E])\)\s*', re.MULTILINE)
 CERTO_ERRADO_RE = re.compile(r'\(\s*\)\s*Certo', re.IGNORECASE)
 
 MATERIAS_INVALIDAS = {
@@ -135,7 +152,7 @@ def texto_auxiliar_de(numero_item, clusters):
     return None
 
 
-def parse_simulado(path, concurso, arquivo_origem=None):
+def parse_simulado(path, concurso, arquivo_origem=None, origem='simulado_migrado'):
     arquivo_origem = arquivo_origem or os.path.basename(path)
     texto = load_text(path)
 
@@ -168,7 +185,7 @@ def parse_simulado(path, concurso, arquivo_origem=None):
             falhas.append({'numero': None, 'motivo': 'nao achei marcador de item antes de um COMENTARIOS'})
             continue
 
-        numero = int(item_match.group(1))
+        numero = int(item_match.group(1) or item_match.group(2))
         bloco = bloco_enunciado_bruto[item_match.end():]
 
         primeira_alt_pos, alternativas = extrair_alternativas(bloco)
@@ -197,7 +214,7 @@ def parse_simulado(path, concurso, arquivo_origem=None):
             'concurso': concurso,
             'materia': materia_de(cm.start(), mapa_materias),
             'tema': None,
-            'origem': 'simulado_migrado',
+            'origem': origem,
             'formato': formato,
             'banca_ano': None,
             'texto_auxiliar': texto_auxiliar_de(numero, clusters_texto),

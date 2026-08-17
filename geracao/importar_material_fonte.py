@@ -1,5 +1,6 @@
 import argparse
 import csv
+import json
 import os
 import sys
 
@@ -16,6 +17,11 @@ LOTE = 500
 
 
 def carregar_registros(path):
+    if path.lower().endswith('.json'):
+        with open(path, encoding='utf-8') as f:
+            registros = json.load(f)
+        return [{k: r[k] for k in CAMPOS} for r in registros]
+
     registros = []
     with open(path, encoding='utf-8') as f:
         reader = csv.DictReader(f)

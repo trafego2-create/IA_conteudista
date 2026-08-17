@@ -1,6 +1,19 @@
 import pypdf, re, json, sys, hashlib
 
+try:
+    import docx
+except ImportError:
+    docx = None
+
 def load_pages(path):
+    if path.lower().endswith('.docx'):
+        if docx is None:
+            raise ImportError('python-docx nao instalado - necessario pra ler .docx')
+        # docx nao tem conceito de "pagina" acessivel via python-docx - trata o documento
+        # inteiro como uma pagina so (perde so o strip de cabecalho repetido por pagina,
+        # que e cosmetico; a ancoragem por sumario funciona igual)
+        documento = docx.Document(path)
+        return ['\n'.join(p.text for p in documento.paragraphs)]
     reader = pypdf.PdfReader(path)
     return [(p.extract_text() or '') for p in reader.pages]
 
@@ -28,6 +41,22 @@ def parse_sumario(text):
             tema = m.group(1).rstrip('. ').strip()
             if tema:
                 temas.append((norm(tema), int(m.group(2))))
+    if temas:
+        return temas
+    # fallback: sumario simples sem preenchimento de pontos nem numero de pagina, so uma
+    # lista curta de titulos (ex.: apostilas de materia unica com poucos temas, tipo
+    # "Decreto Nº 1.171" / "Decreto Nº 6.029" soltos). So considera linhas DEPOIS da
+    # palavra "Sumario" em si, senao pega lixo do cabecalho/titulo da pagina.
+    m_sumario = re.search(r'Sum[aá]rio', text, re.IGNORECASE)
+    if not m_sumario:
+        return temas
+    ordem = 0
+    for line in text[m_sumario.end():].splitlines():
+        candidate = norm(line)
+        if not candidate or candidate.isdigit() or len(candidate) > 80:
+            continue
+        ordem += 1
+        temas.append((candidate, ordem))
     return temas
 
 def strip_header(text, materia_upper):
@@ -150,6 +179,81 @@ def parse_apostila(path, concurso, arquivo_origem):
                 'hash_conteudo': hashlib.sha256(trecho_norm.encode('utf-8')).hexdigest(),
             })
     return registros
+
+def find_sumario_page(pages):
+    for i, text in enumerate(pages):
+        if re.search(r'^\s*Sum[aá]rio\s*$', text, re.IGNORECASE | re.MULTILINE):
+            return i
+    return None
+
+
+def parse_apostila_single(path, concurso, materia, arquivo_origem):
+    """Variante de parse_apostila pra arquivo de UMA materia so (sem os divisores
+    'CONCURSOS...CONCURSOS' entre materias da apostila combinada original) - formato usado
+    nos arquivos '01 - BB - Português Básico.pdf' etc. Reaproveita a mesma logica de ancoragem
+    por sumario, so sem o loop externo por materia (aqui so tem uma, dada explicitamente)."""
+    pages = load_pages(path)
+    sumario_page_idx = find_sumario_page(pages)
+    if sumario_page_idx is None:
+        raise ValueError('pagina de Sumario nao encontrada')
+    sumario_text = pages[sumario_page_idx]
+    temas = parse_sumario(sumario_text)
+    if not temas:
+        raise ValueError('nenhum tema encontrado no Sumario')
+    content_start = sumario_page_idx + 1
+    content_end = len(pages)
+    materia_upper = materia.upper()
+
+    page_spans = []
+    parts = []
+    cursor = 0
+    for p in range(content_start, content_end):
+        raw = pages[p]
+        pn = page_number_of(raw)
+        cleaned = norm(strip_header(raw, materia_upper))
+        if not cleaned:
+            continue
+        start = cursor
+        parts.append(cleaned)
+        cursor += len(cleaned) + 1
+        page_spans.append((start, cursor - 1, pn))
+    full_norm = ' '.join(parts)
+
+    def page_of(pos):
+        for start, end, pn in page_spans:
+            if start <= pos <= end:
+                return pn
+        return None
+
+    full_stripped, index_map = build_stripped(full_norm)
+    anchors = []
+    prev_pos = -1
+    for tema, expected_page in temas:
+        candidates = sorted(find_all_fuzzy(full_stripped, index_map, tema))
+        if not candidates:
+            continue
+        valid = [c for c in candidates if c > prev_pos]
+        pool = valid if valid else candidates
+        best = min(pool, key=lambda pos: abs((page_of(pos) or expected_page) - expected_page))
+        anchors.append((best, tema))
+        prev_pos = best
+
+    registros = []
+    for i, (pos, tema) in enumerate(anchors):
+        end = anchors[i + 1][0] if i + 1 < len(anchors) else len(full_norm)
+        trecho_norm = full_norm[pos:end].strip()
+        registros.append({
+            'concurso': concurso,
+            'arquivo_origem': arquivo_origem,
+            'materia': materia,
+            'tema': tema,
+            'ordem': i,
+            'pagina': page_of(pos),
+            'trecho': trecho_norm,
+            'hash_conteudo': hashlib.sha256(trecho_norm.encode('utf-8')).hexdigest(),
+        })
+    return registros
+
 
 if __name__ == '__main__':
     src = sys.argv[1]

@@ -1,11 +1,21 @@
 import pypdf, re, json, sys, hashlib, os
 
+try:
+    import docx
+except ImportError:
+    docx = None
+
 
 def norm(s):
     return re.sub(r'\s+', ' ', s).strip()
 
 
 def load_text(path):
+    if path.lower().endswith('.docx'):
+        if docx is None:
+            raise ImportError('python-docx nao instalado - necessario pra ler .docx')
+        documento = docx.Document(path)
+        return '\n'.join(p.text for p in documento.paragraphs)
     reader = pypdf.PdfReader(path)
     return '\n'.join((p.extract_text() or '') for p in reader.pages)
 
@@ -35,7 +45,11 @@ def parse_sumario(text):
 def split_sumario_and_body(text):
     m = re.search(r'\n\s*Sum[aá]rio\s*\n', text, re.IGNORECASE)
     if not m:
-        raise ValueError('secao "Sumario" nao encontrada')
+        # alguns .docx nao tem secao de Sumario (diferente dos PDFs) - degrada
+        # graciosamente: sem sumario nao da pra ancorar 'tema' (fica None pra
+        # todo mundo), mas a extracao de enunciado/comentario/gabarito nao
+        # depende disso, continua funcionando normalmente
+        return '', text
     sumario_start = m.end()
     # sumario termina no proximo heading real (primeira linha em CAIXA ALTA
     # que nao seja uma entrada de sumario, ou ate 40 linhas de distancia)

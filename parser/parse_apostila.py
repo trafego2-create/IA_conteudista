@@ -255,6 +255,45 @@ def parse_apostila_single(path, concurso, materia, arquivo_origem):
     return registros
 
 
+def parse_apostila_docx_por_heading(path, concurso, materia, arquivo_origem):
+    """Variante pra .docx cujo 'Sumario' e um campo de TOC automatico do Word - o texto do
+    campo fica vazio quando lido via python-docx (nao e texto literal, e um campo calculado),
+    entao a ancoragem por sumario textual (parse_apostila_single) nao acha nada mesmo o
+    documento tendo secoes de verdade. Mais confiavel nesse caso: usar o estilo 'Heading 1'
+    do proprio Word como marcador de tema, ja que reflete a estrutura real do documento."""
+    if docx is None:
+        raise ImportError('python-docx nao instalado - necessario pra ler .docx')
+    documento = docx.Document(path)
+    paragrafos = documento.paragraphs
+
+    indices_heading = [
+        i for i, p in enumerate(paragrafos)
+        if p.style and p.style.name == 'Heading 1' and p.text.strip()
+    ]
+    if not indices_heading:
+        raise ValueError('nenhum paragrafo com estilo "Heading 1" encontrado')
+
+    registros = []
+    for ordem, idx in enumerate(indices_heading):
+        tema = norm(paragrafos[idx].text)
+        fim = indices_heading[ordem + 1] if ordem + 1 < len(indices_heading) else len(paragrafos)
+        textos = [norm(p.text) for p in paragrafos[idx:fim] if p.text.strip()]
+        trecho_norm = ' '.join(textos).strip()
+        if not trecho_norm:
+            continue
+        registros.append({
+            'concurso': concurso,
+            'arquivo_origem': arquivo_origem,
+            'materia': materia,
+            'tema': tema,
+            'ordem': ordem,
+            'pagina': None,
+            'trecho': trecho_norm,
+            'hash_conteudo': hashlib.sha256(trecho_norm.encode('utf-8')).hexdigest(),
+        })
+    return registros
+
+
 if __name__ == '__main__':
     src = sys.argv[1]
     concurso = sys.argv[2]

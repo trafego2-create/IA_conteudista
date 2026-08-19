@@ -105,11 +105,13 @@ QUESTAO_ENUNCIADO_RE = re.compile(
     # numero inteiro a ser consumido antes de checar o lookahead.
     # O lookahead em si evita casar com o cabecalho "QUESTAO NN\nCOMENTARIO:"
     # do bloco de comentarios (mesmo padrao de numero, contexto diferente).
-    r'QUEST[AÃ]O\s*0*(\d+)\b(?!\s*\n\s*COMENT[AÁ]RIO)\s*[:.\-–]?\s*(?:\(([^)]*)\))?\s*',
+    r'QUEST[AÃ]O\s*0*(\d+)\b(?!\s*[:.\-–]?\s*\n\s*COMENT[AÁ]RIO)\s*[:.\-–]?\s*(?:\(([^)]*)\))?\s*',
     re.IGNORECASE,
 )
 QUESTAO_COMENTARIO_RE = re.compile(
-    r'QUEST[AÃ]O\s*0*(\d+)\s*\n\s*COMENT[AÁ]RIO\s*:\s*(.*?)\n\s*Gabarito\s*:\s*([^\n]+)',
+    # pontuacao apos "QUESTAO NN", "COMENTARIO(S)" e "GABARITO" varia entre arquivos (":" as
+    # vezes presente, as vezes nao) - todos os 3 pontos ficam opcionais, tolerando as duas formas
+    r'QUEST[AÃ]O\s*0*(\d+)\s*[:.\-–]?\s*\n\s*COMENT[AÁ]RIOS?\s*:?\s*(.*?)\n\s*GABARITO\s*:?\s*([^\n]+)',
     re.IGNORECASE | re.DOTALL,
 )
 ALTERNATIVA_MARCADOR_RE = re.compile(r'^([A-E])\)\s*', re.MULTILINE)
@@ -174,7 +176,7 @@ def comentarios_texto(body):
     pra frente e so procurar pelo padrao "QUESTAO NN\\nCOMENTARIO:...Gabarito:"
     em todo o resto do documento, que e auto-delimitado e ignora com seguranca
     qualquer enunciado de secao seguinte no meio do caminho."""
-    m = re.search(r'\n\s*COMENT[AÁ]RIOS\s*\n', body, re.IGNORECASE)
+    m = re.search(r'\n\s*COMENT[AÁ]RIOS\s*:?\s*\n', body, re.IGNORECASE)
     if not m:
         raise ValueError('secao "COMENTARIOS" nao encontrada')
     return body[m.end():]

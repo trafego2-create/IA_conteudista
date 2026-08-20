@@ -10,8 +10,8 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 from core import (  # noqa: E402
     PRODUTOS, DecisaoInvalida, EstoqueInsuficiente, MaterialNaoEncontrado, ProdutoInvalido,
-    QuestaoNaoEncontrada, gerar_lote, gerar_questao, get_openai, listar_materias, revisar_questao,
-    sortear_simulado, sortear_simulado_estratificado,
+    QuestaoNaoEncontrada, gerar_lote, gerar_questao, get_openai, listar_concursos, listar_materias,
+    revisar_questao, sortear_simulado, sortear_simulado_estratificado,
 )
 
 app = FastAPI(title='Aprova Sim - IA Conteudista')
@@ -25,6 +25,12 @@ novas (Mestre em Questões ou Revisão Farol), use a ferramenta gerar_questoes. 
 para montar/gerar um simulado, use a ferramenta montar_simulado.
 
 Regras de negócio importantes, explique ao usuário quando relevante:
+- O concurso é sempre identificado por uma SIGLA interna no banco (ex.: BB, INSS, TJSP, CEF,
+  PETR, MPSP-OP), não pelo nome por extenso. Se o usuário mencionar o concurso por extenso ou
+  de forma diferente da sigla (ex.: "Banco do Brasil", "Petrobrás", "Caixa Econômica Federal"),
+  SEMPRE chame listar_concursos primeiro pra descobrir a sigla exata antes de chamar
+  gerar_questoes ou montar_simulado - passar o nome por extenso direto faz a ferramenta
+  responder "sem material cadastrado" mesmo quando o material existe.
 - Simulados NUNCA são gerados por IA - são sempre sorteados do banco de questões já aprovadas
   por revisão humana. Se a ferramenta falhar por falta de estoque aprovado suficiente, não existe
   fallback gerando questões novas para simulado - explique isso e sugira gerar mais questões
@@ -55,6 +61,18 @@ uma alternativa por linha ("A) ...", "B) ...", etc) e o Gabarito é a letra corr
 """
 
 TOOLS = [
+    {
+        'type': 'function',
+        'function': {
+            'name': 'listar_concursos',
+            'description': (
+                'Lista as siglas de concurso (grafia exata salva no banco) que têm material '
+                'cadastrado pra geração via IA. Chamar antes de gerar_questoes ou montar_simulado '
+                'quando o usuário mencionar o concurso por extenso ou de forma diferente da sigla.'
+            ),
+            'parameters': {'type': 'object', 'properties': {}},
+        },
+    },
     {
         'type': 'function',
         'function': {
@@ -142,6 +160,8 @@ TOOLS = [
 
 
 def executar_ferramenta(nome: str, argumentos: dict) -> dict:
+    if nome == 'listar_concursos':
+        return {'concursos': listar_concursos()}
     if nome == 'gerar_questoes':
         try:
             return gerar_lote(

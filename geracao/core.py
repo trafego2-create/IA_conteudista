@@ -152,7 +152,7 @@ def buscar_exemplo_calibracao(supabase, concurso: str, materia: str, formato: st
         .eq('formato', formato)
     )
     if concurso:
-        consulta = consulta.eq('concurso', concurso)
+        consulta = consulta.ilike('concurso', concurso)
     resultado = consulta.limit(1).execute()
     if not resultado.data:
         return ''
@@ -173,7 +173,7 @@ def gerar_questao(
 
     consulta_fonte = supabase.table('material_fonte').select('*').eq('materia', materia).eq('tema', tema)
     if concurso:
-        consulta_fonte = consulta_fonte.eq('concurso', concurso)
+        consulta_fonte = consulta_fonte.ilike('concurso', concurso)
     fonte = consulta_fonte.limit(1).execute()
     if not fonte.data:
         raise MaterialNaoEncontrado(f'nenhum material_fonte para materia={materia!r} tema={tema!r}')
@@ -233,7 +233,7 @@ def listar_temas(concurso: str) -> list[tuple]:
     resultado = (
         supabase.table('material_fonte')
         .select('materia, tema, ordem')
-        .eq('concurso', concurso)
+        .ilike('concurso', concurso)
         .order('materia')
         .order('ordem')
         .execute()
@@ -306,7 +306,7 @@ def _prioridade_reuso(questao: dict):
 
 
 def _candidatas_aprovadas(supabase, concurso: str, materia: str = None, formato: str = None) -> list:
-    consulta = supabase.table('questoes').select('*').eq('concurso', concurso).eq('status', 'aprovada')
+    consulta = supabase.table('questoes').select('*').ilike('concurso', concurso).eq('status', 'aprovada')
     if materia:
         # ilike sem coringa = igualdade ignorando maiuscula/minuscula - o nome da materia
         # digitado em linguagem natural (ex.: "direito constitucional") raramente bate
@@ -319,6 +319,16 @@ def _candidatas_aprovadas(supabase, concurso: str, materia: str = None, formato:
     return candidatas
 
 
+def listar_concursos() -> list:
+    """Siglas de concurso com material_fonte cadastrado (habilitadas pra geracao via IA),
+    na grafia exata salva no banco - usado pelo assistente antes de gerar_questoes quando o
+    usuario menciona o concurso pelo nome por extenso (ex.: 'Banco do Brasil', 'Petrobrás')
+    em vez da sigla interna ('BB', 'PETR'), que e o que fica salvo no banco."""
+    supabase = get_supabase()
+    resultado = supabase.table('material_fonte').select('concurso').execute()
+    return sorted({linha['concurso'] for linha in resultado.data})
+
+
 def listar_materias(concurso: str) -> list:
     """Nomes de materia distintos com estoque aprovado para o concurso, na grafia exata
     salva no banco - usado pelo assistente pra alinhar a distribuicao por materia de um
@@ -328,7 +338,7 @@ def listar_materias(concurso: str) -> list:
     resultado = (
         supabase.table('questoes')
         .select('materia')
-        .eq('concurso', concurso)
+        .ilike('concurso', concurso)
         .eq('status', 'aprovada')
         .execute()
     )

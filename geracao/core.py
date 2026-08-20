@@ -124,8 +124,16 @@ PRODUTOS = {
 }
 
 
+PADRAO_CITACAO = re.compile(
+    # o modelo deveria usar so aspas retas duplas (instrucao no prompt), mas na pratica usa
+    # aspas simples e aspas tipograficas tambem com frequencia real - so aceitar aspas retas
+    # duplas rejeitava citacoes corretas, verbatim no trecho, so por causa do estilo de aspas
+    r'"([^"]+)"|\'([^\']+)\'|“([^”]+)”|‘([^’]+)’'
+)
+
+
 def validar_citacao(texto: str, trecho: str, exigir_citacao: bool) -> bool:
-    citacoes = re.findall(r'"([^"]+)"', texto)
+    citacoes = [g for m in PADRAO_CITACAO.finditer(texto) for g in m.groups() if g]
     if not citacoes:
         return not exigir_citacao
     trecho_norm = re.sub(r'\s+', ' ', trecho).upper()

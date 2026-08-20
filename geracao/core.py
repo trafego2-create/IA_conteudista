@@ -3,10 +3,37 @@ import itertools
 import json
 import os
 import re
+import unicodedata
 from datetime import datetime, timezone
 
 from openai import OpenAI
 from supabase import create_client
+
+# nome por extenso (ou variacoes comuns) -> sigla interna salva no banco. O modelo do chat
+# quase sempre resolve isso sozinho chamando listar_concursos antes (ver SYSTEM_PROMPT_CHAT
+# em api.py), mas essa chamada nao e garantida (comportamento de LLM nao e deterministico) -
+# esse mapa e uma segunda camada de protecao no proprio codigo, independente do modelo lembrar
+# de chamar a ferramenta certa. So cobre os apelidos mais obvios; nao substitui listar_concursos
+# pra nomes fora desse mapa.
+ALIAS_CONCURSO = {
+    'banco do brasil': 'BB',
+    'caixa': 'CEF',
+    'caixa economica federal': 'CEF',
+    'petrobras': 'PETR',
+    'ministerio publico de sao paulo': 'MPSP-OP',
+    'mpsp': 'MPSP-OP',
+    'mpsp oficial de promotoria': 'MPSP-OP',
+    'tribunal de justica de sao paulo': 'TJSP',
+}
+
+
+def _normalizar_concurso(s: str) -> str:
+    sem_acento = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('ascii')
+    return re.sub(r'[^a-z0-9]+', ' ', sem_acento.lower()).strip()
+
+
+def resolver_concurso(concurso: str) -> str:
+    return ALIAS_CONCURSO.get(_normalizar_concurso(concurso), concurso)
 
 SYSTEM_PROMPT_MESTRE_QUESTOES = """Você é um conteudista especializado em concursos públicos, escrevendo questões
 comentadas no padrão da plataforma Aprova Sim, com o mesmo nível de profundidade
@@ -173,7 +200,7 @@ def gerar_questao(
 
     consulta_fonte = supabase.table('material_fonte').select('*').eq('materia', materia).eq('tema', tema)
     if concurso:
-        consulta_fonte = consulta_fonte.ilike('concurso', concurso)
+        consulta_fonte = consulta_fonte.ilike('concurso', resolver_concurso(concurso))
     fonte = consulta_fonte.limit(1).execute()
     if not fonte.data:
         raise MaterialNaoEncontrado(f'nenhum material_fonte para materia={materia!r} tema={tema!r}')
@@ -233,7 +260,7 @@ def listar_temas(concurso: str) -> list[tuple]:
     resultado = (
         supabase.table('material_fonte')
         .select('materia, tema, ordem')
-        .ilike('concurso', concurso)
+        .ilike('concurso', resolver_concurso(concurso))
         .order('materia')
         .order('ordem')
         .execute()
@@ -306,7 +333,7 @@ def _prioridade_reuso(questao: dict):
 
 
 def _candidatas_aprovadas(supabase, concurso: str, materia: str = None, formato: str = None) -> list:
-    consulta = supabase.table('questoes').select('*').ilike('concurso', concurso).eq('status', 'aprovada')
+    consulta = supabase.table('questoes').select('*').ilike('concurso', resolver_concurso(concurso)).eq('status', 'aprovada')
     if materia:
         # ilike sem coringa = igualdade ignorando maiuscula/minuscula - o nome da materia
         # digitado em linguagem natural (ex.: "direito constitucional") raramente bate
@@ -338,7 +365,7 @@ def listar_materias(concurso: str) -> list:
     resultado = (
         supabase.table('questoes')
         .select('materia')
-        .ilike('concurso', concurso)
+        .ilike('concurso', resolver_concurso(concurso))
         .eq('status', 'aprovada')
         .execute()
     )

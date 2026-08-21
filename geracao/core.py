@@ -32,6 +32,47 @@ def _normalizar_texto(s: str) -> str:
     return re.sub(r'[^a-z0-9]+', ' ', sem_acento.lower()).strip()
 
 
+_ROMANOS_PARA_ARABICO = {
+    'i': '1', 'ii': '2', 'iii': '3', 'iv': '4', 'v': '5',
+    'vi': '6', 'vii': '7', 'viii': '8', 'ix': '9', 'x': '10',
+}
+
+
+def _canonizar_tokens(texto_norm: str) -> list:
+    return [_ROMANOS_PARA_ARABICO.get(tok, tok) for tok in texto_norm.split()]
+
+
+def _tokens_equivalentes(a: str, b: str) -> bool:
+    """Dois tokens batem se forem iguais, ou (pra tokens nao-numericos) um for prefixo do outro
+    com pelo menos 2 letras - cobre abreviacao tipo 'op'/'operacao'. Numeros nunca casam por
+    prefixo (evita '1' bater com '10', ou pior, o colapso de romanos 'i'/'iii' que gerou o bug
+    original de misturar Bloco I com Bloco III)."""
+    if a == b:
+        return True
+    if a.isdigit() or b.isdigit():
+        return False
+    menor, maior = (a, b) if len(a) <= len(b) else (b, a)
+    return len(menor) >= 2 and maior.startswith(menor)
+
+
+def _materia_bate(materia_norm: str, tema_norm: str) -> bool:
+    """Compara dois nomes de materia ja normalizados como sequencia de tokens equivalentes (nao
+    substring crua de string inteira) - substring cru fazia 'op bloco i' bater como prefixo de
+    'op bloco iii', misturando Bloco I (Quimica) com Bloco III (Engenharia) no mesmo lote.
+    Numerais romanos sao convertidos pra arabico antes de comparar, pra 'Bloco 3' bater com
+    'Bloco III', e tokens de texto casam por prefixo (>=2 letras) pra 'Operação' bater com 'Op'."""
+    tokens_a = _canonizar_tokens(materia_norm)
+    tokens_b = _canonizar_tokens(tema_norm)
+    menor, maior = (tokens_a, tokens_b) if len(tokens_a) <= len(tokens_b) else (tokens_b, tokens_a)
+    n = len(menor)
+    if n == 0:
+        return False
+    for i in range(len(maior) - n + 1):
+        if all(_tokens_equivalentes(x, y) for x, y in zip(menor, maior[i:i + n])):
+            return True
+    return False
+
+
 def resolver_concurso(concurso: str) -> str:
     return ALIAS_CONCURSO.get(_normalizar_texto(concurso), concurso)
 
@@ -393,7 +434,7 @@ def gerar_lote(
         materia_norm = _normalizar_texto(materia)
         temas_filtrados = [
             (m, t) for m, t in temas
-            if materia_norm in _normalizar_texto(m) or _normalizar_texto(m) in materia_norm
+            if _materia_bate(materia_norm, _normalizar_texto(m))
         ]
         if not temas_filtrados:
             raise MaterialNaoEncontrado(

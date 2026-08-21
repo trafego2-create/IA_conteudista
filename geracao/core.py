@@ -132,13 +132,26 @@ PADRAO_CITACAO = re.compile(
 )
 
 
+def _normalizar_para_comparacao_citacao(s: str) -> str:
+    """Normalizacao agressiva so pra decidir se uma citacao 'bate' com o trecho - nao muda o
+    texto exibido em lugar nenhum. Espaco em volta de simbolos matematicos (ex.: 'A ∪ B' vs
+    'A∪B') e indicador ordinal/travessao (13º vs 13°, − vs – vs -) sao trocados com frequencia
+    real entre o texto extraido do PDF de origem e o jeito que o modelo reproduz a citacao,
+    sem mudar o sentido - normalizar isso evita falso-negativo numa citacao genuinamente
+    verbatim, sem abrir mao de pegar citacao realmente inventada (conteudo ausente do trecho)."""
+    s = re.sub(r'[−–—]', '-', s)
+    s = re.sub(r'[°ºª]', '', s)
+    s = re.sub(r'\s+', '', s)
+    return s.upper()
+
+
 def validar_citacao(texto: str, trecho: str, exigir_citacao: bool) -> bool:
     citacoes = [g for m in PADRAO_CITACAO.finditer(texto) for g in m.groups() if g]
     if not citacoes:
         return not exigir_citacao
-    trecho_norm = re.sub(r'\s+', ' ', trecho).upper()
+    trecho_norm = _normalizar_para_comparacao_citacao(trecho)
     for citacao in citacoes:
-        citacao_norm = re.sub(r'\s+', ' ', citacao).strip().upper()
+        citacao_norm = _normalizar_para_comparacao_citacao(citacao)
         if citacao_norm not in trecho_norm:
             return False
     return True

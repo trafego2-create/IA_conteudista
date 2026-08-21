@@ -242,6 +242,12 @@
     }
   }
 
+  function linhaAlternativas(alternativas) {
+    if (!alternativas) return '';
+    const texto = Object.keys(alternativas).sort().map((letra) => letra + ') ' + alternativas[letra]).join('\n');
+    return linha('Alternativas', texto);
+  }
+
   function renderizarQuestao(questao) {
     const card = document.createElement('div');
     card.className = 'questao-card';
@@ -249,6 +255,7 @@
     let html = '';
     html += linha('Gabarito', questao.gabarito);
     html += linha('Enunciado', questao.enunciado);
+    html += linhaAlternativas(questao.alternativas);
     html += linha('Comentário', questao.comentario);
     html += linha('Resposta', questao.resposta);
     card.innerHTML = html;

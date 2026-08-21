@@ -70,6 +70,45 @@ TRECHO (fonte de verdade, não usar nada fora daqui):
 {exemplo_calibracao}
 Gere 1 questão comentada no formato certo_errado sobre este trecho."""
 
+SYSTEM_PROMPT_MESTRE_QUESTOES_ABCDE = """Você é um conteudista especializado em concursos públicos, escrevendo questões
+comentadas de múltipla escolha (5 alternativas, A a E) no padrão da plataforma Aprova Sim,
+com o mesmo nível de profundidade jurídica e didática do material de referência.
+
+REGRAS OBRIGATÓRIAS:
+1. Use apenas o TRECHO fornecido como fonte de conteúdo. Nunca cite lei, decreto,
+   artigo ou instrução normativa que não apareça literalmente no TRECHO.
+2. Qualquer citação legal no campo "comentario" deve ser uma transcrição literal
+   de um trecho do TRECHO fornecido, delimitada entre aspas retas (" ").
+   Não parafraseie o texto legal citado.
+3. Gere exatamente 5 alternativas (A a E), sendo só UMA correta. As alternativas erradas
+   devem ser plausíveis (erros sutis, não absurdos óbvios), mas baseadas no TRECHO - não
+   invente informação externa nem para as alternativas erradas.
+4. Se um EXEMPLO DE REFERÊNCIA for fornecido, use-o só para calibrar tom,
+   profundidade e estrutura do comentário (é uma questão real de banca, revisada
+   por humano). Nunca copie seu conteúdo nem cite a lei mencionada nele - a
+   única fonte válida de citação continua sendo o TRECHO.
+5. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON.
+
+FORMATO DE SAÍDA (JSON):
+{
+  "enunciado": "...",
+  "alternativas": {"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."},
+  "gabarito": "A" ou "B" ou "C" ou "D" ou "E" (a letra da alternativa correta),
+  "comentario": "..."
+}"""
+
+USER_PROMPT_MESTRE_QUESTOES_ABCDE = """CONCURSO: {concurso}
+MATÉRIA: {materia}
+TEMA: {tema}
+FORMATO: múltipla escolha (A a E)
+
+TRECHO (fonte de verdade, não usar nada fora daqui):
+\"\"\"
+{trecho}
+\"\"\"
+{exemplo_calibracao}
+Gere 1 questão comentada de múltipla escolha (5 alternativas, A a E) sobre este trecho."""
+
 BLOCO_EXEMPLO_CALIBRACAO = """
 EXEMPLO DE REFERÊNCIA (questão real de banca, só para calibrar tom/estilo - não copiar):
 Enunciado: {enunciado}
@@ -110,15 +149,27 @@ Gere 1 flashcard (pergunta e resposta) de revisão sobre este trecho."""
 
 PRODUTOS = {
     'mestre_questoes': {
-        'system_prompt': SYSTEM_PROMPT_MESTRE_QUESTOES,
-        'user_prompt': USER_PROMPT_MESTRE_QUESTOES,
-        'formato': 'certo_errado',
+        'formatos': {
+            'certo_errado': {
+                'system_prompt': SYSTEM_PROMPT_MESTRE_QUESTOES,
+                'user_prompt': USER_PROMPT_MESTRE_QUESTOES,
+            },
+            'abcde': {
+                'system_prompt': SYSTEM_PROMPT_MESTRE_QUESTOES_ABCDE,
+                'user_prompt': USER_PROMPT_MESTRE_QUESTOES_ABCDE,
+            },
+        },
+        'formato_padrao': 'certo_errado',
         'exigir_citacao': True,
     },
     'revisao_farol': {
-        'system_prompt': SYSTEM_PROMPT_REVISAO_FAROL,
-        'user_prompt': USER_PROMPT_REVISAO_FAROL,
-        'formato': None,
+        'formatos': {
+            None: {
+                'system_prompt': SYSTEM_PROMPT_REVISAO_FAROL,
+                'user_prompt': USER_PROMPT_REVISAO_FAROL,
+            },
+        },
+        'formato_padrao': None,
         'exigir_citacao': False,
     },
 }
@@ -210,11 +261,19 @@ def buscar_exemplo_calibracao(supabase, concurso: str, materia: str, formato: st
 
 def gerar_questao(
     materia: str, tema: str, produto: str = 'mestre_questoes', model: str = 'gpt-4.1',
-    concurso: str = None,
+    concurso: str = None, formato: str = None,
 ) -> dict:
     if produto not in PRODUTOS:
         raise ProdutoInvalido(f'produto deve ser um de {list(PRODUTOS)}, recebido {produto!r}')
-    config = PRODUTOS[produto]
+    produto_config = PRODUTOS[produto]
+    formato_resolvido = formato or produto_config['formato_padrao']
+    if formato_resolvido not in produto_config['formatos']:
+        raise ProdutoInvalido(
+            f"formato deve ser um de {list(produto_config['formatos'])} pra produto={produto!r}, "
+            f'recebido {formato_resolvido!r}'
+        )
+    config = produto_config['formatos'][formato_resolvido]
+    exigir_citacao = produto_config['exigir_citacao']
 
     supabase = get_supabase()
     openai_client = get_openai()
@@ -228,7 +287,7 @@ def gerar_questao(
     registro = fonte.data[0]
     trecho = registro['trecho']
 
-    exemplo_calibracao = buscar_exemplo_calibracao(supabase, registro['concurso'], registro['materia'], config['formato'])
+    exemplo_calibracao = buscar_exemplo_calibracao(supabase, registro['concurso'], registro['materia'], formato_resolvido)
 
     user_prompt = config['user_prompt'].format(
         concurso=registro['concurso'], materia=registro['materia'],
@@ -246,7 +305,7 @@ def gerar_questao(
     questao = json.loads(resposta.choices[0].message.content)
 
     texto_para_validar = questao.get('comentario') or questao.get('resposta', '')
-    citacao_ok = validar_citacao(texto_para_validar, trecho, config['exigir_citacao'])
+    citacao_ok = validar_citacao(texto_para_validar, trecho, exigir_citacao)
     status = 'pendente_revisao' if citacao_ok else 'rejeitada'
     motivo_rejeicao = None if citacao_ok else 'citacao legal nao encontrada literalmente no material_fonte'
 
@@ -257,10 +316,11 @@ def gerar_questao(
         'materia': registro['materia'],
         'tema': registro['tema'],
         'origem': produto,
-        'formato': config['formato'],
+        'formato': formato_resolvido,
         'status': status,
         'motivo_rejeicao': motivo_rejeicao,
         'enunciado': questao['enunciado'],
+        'alternativas': questao.get('alternativas'),
         'gabarito': questao.get('gabarito') or questao.get('resposta'),
         'comentario': questao.get('comentario'),
         'arquivo_origem': registro['arquivo_origem'],
@@ -299,17 +359,21 @@ def listar_temas(concurso: str) -> list[tuple]:
     return temas
 
 
-def gerar_lote(concurso: str, quantidade: int, produto: str = 'mestre_questoes', model: str = 'gpt-4.1') -> dict:
+def gerar_lote(
+    concurso: str, quantidade: int, produto: str = 'mestre_questoes', model: str = 'gpt-4.1',
+    formato: str = None,
+) -> dict:
     """Gera `quantidade` questoes novas via IA, uma por tema em round-robin. Nunca reaproveita -
     Mestre em Questoes e sempre 100% gerado. Falhas pontuais (ex.: duplicata de hash) nao derrubam
-    o lote inteiro, ficam listadas em 'falhas'."""
+    o lote inteiro, ficam listadas em 'falhas'. formato (opcional, so vale pra mestre_questoes):
+    'certo_errado' (padrao) ou 'abcde'."""
     temas = listar_temas(concurso)
 
     resultados = []
     falhas = []
     for materia, tema in itertools.islice(itertools.cycle(temas), quantidade):
         try:
-            resultados.append(gerar_questao(materia, tema, produto, model, concurso=concurso))
+            resultados.append(gerar_questao(materia, tema, produto, model, concurso=concurso, formato=formato))
         except Exception as e:
             falhas.append({'materia': materia, 'tema': tema, 'erro': str(e)})
 

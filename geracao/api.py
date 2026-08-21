@@ -42,6 +42,9 @@ Regras de negócio importantes, explique ao usuário quando relevante:
   usuário, e maiúscula/minúscula ou variações de escrita podem não bater).
 - Questões geradas por IA (Mestre em Questões, Revisão Farol) sempre nascem como pendentes de
   revisão humana - nenhuma vai ao aluno antes de alguém aprovar.
+- gerar_questoes aceita o parâmetro formato ('certo_errado', padrão, ou 'abcde') pra Mestre em
+  Questões. Se o pedido mencionar múltipla escolha ou "alternativas de A a E", SEMPRE passe
+  formato='abcde' - sem isso a geração sai em Certo/Errado mesmo o pedido tendo sido outro.
 
 Ao listar questões (de um simulado ou recém-geradas) na resposta, siga este formato exato pra
 cada questão, sem markdown/negrito e sem agrupar por matéria com cabeçalho - só numeração
@@ -91,6 +94,15 @@ TOOLS = [
                         'type': 'string',
                         'enum': ['mestre_questoes', 'revisao_farol'],
                         'default': 'mestre_questoes',
+                    },
+                    'formato': {
+                        'type': 'string',
+                        'enum': ['certo_errado', 'abcde'],
+                        'description': (
+                            'Só vale pra produto=mestre_questoes (Revisão Farol não tem formato). '
+                            'Padrão certo_errado. Usar abcde quando o pedido mencionar múltipla '
+                            'escolha ou "alternativas de A a E".'
+                        ),
                     },
                 },
                 'required': ['concurso', 'quantidade'],
@@ -167,6 +179,7 @@ def executar_ferramenta(nome: str, argumentos: dict) -> dict:
             return gerar_lote(
                 argumentos['concurso'], argumentos['quantidade'],
                 argumentos.get('produto', 'mestre_questoes'),
+                formato=argumentos.get('formato'),
             )
         except (MaterialNaoEncontrado, ProdutoInvalido) as e:
             return {'erro': str(e)}

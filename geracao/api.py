@@ -11,7 +11,7 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 from core import (  # noqa: E402
     PRODUTOS, DecisaoInvalida, EstoqueInsuficiente, MaterialNaoEncontrado, ProdutoInvalido,
     QuestaoNaoEncontrada, gerar_lote, gerar_questao, get_openai, listar_concursos, listar_materias,
-    revisar_questao, sortear_simulado, sortear_simulado_estratificado,
+    listar_materias_geracao, revisar_questao, sortear_simulado, sortear_simulado_estratificado,
 )
 
 app = FastAPI(title='Aprova Sim - IA Conteudista')
@@ -45,6 +45,12 @@ Regras de negócio importantes, explique ao usuário quando relevante:
 - gerar_questoes aceita o parâmetro formato ('certo_errado', padrão, ou 'abcde') pra Mestre em
   Questões. Se o pedido mencionar múltipla escolha ou "alternativas de A a E", SEMPRE passe
   formato='abcde' - sem isso a geração sai em Certo/Errado mesmo o pedido tendo sido outro.
+- gerar_questoes aceita o parâmetro materia pra restringir a geração a um assunto específico
+  (ex.: "gere questões do Bloco I", "de Direito Constitucional"). Sem esse parâmetro a geração
+  sorteia entre TODAS as matérias do concurso, podendo sair algo bem diferente do pedido. Se o
+  usuário mencionar uma matéria/bloco/assunto específico, chame listar_materias_geracao primeiro
+  pra pegar o nome exato salvo no banco daquele concurso (nomes como "Op Bloco I" não são óbvios
+  a partir do pedido do usuário) e passe esse nome como materia.
 
 Ao listar questões (de um simulado ou recém-geradas) na resposta, siga este formato exato pra
 cada questão, sem markdown/negrito e sem agrupar por matéria com cabeçalho - só numeração
@@ -79,6 +85,22 @@ TOOLS = [
     {
         'type': 'function',
         'function': {
+            'name': 'listar_materias_geracao',
+            'description': (
+                'Lista os nomes de matéria (grafia exata salva no banco) disponíveis pra geração '
+                'via IA num concurso. Chamar antes de gerar_questoes quando o usuário mencionar '
+                'uma matéria/bloco/assunto específico, pra passar o nome exato como materia.'
+            ),
+            'parameters': {
+                'type': 'object',
+                'properties': {'concurso': {'type': 'string'}},
+                'required': ['concurso'],
+            },
+        },
+    },
+    {
+        'type': 'function',
+        'function': {
             'name': 'gerar_questoes',
             'description': (
                 'Gera N questões NOVAS via IA para um concurso, no formato Mestre em Questões '
@@ -94,6 +116,13 @@ TOOLS = [
                         'type': 'string',
                         'enum': ['mestre_questoes', 'revisao_farol'],
                         'default': 'mestre_questoes',
+                    },
+                    'materia': {
+                        'type': 'string',
+                        'description': (
+                            'Restringe a geração a essa matéria (grafia exata do banco - chamar '
+                            'listar_materias_geracao antes). Omitir gera de qualquer matéria do concurso.'
+                        ),
                     },
                     'formato': {
                         'type': 'string',
@@ -179,10 +208,12 @@ def executar_ferramenta(nome: str, argumentos: dict) -> dict:
             return gerar_lote(
                 argumentos['concurso'], argumentos['quantidade'],
                 argumentos.get('produto', 'mestre_questoes'),
-                formato=argumentos.get('formato'),
+                formato=argumentos.get('formato'), materia=argumentos.get('materia'),
             )
         except (MaterialNaoEncontrado, ProdutoInvalido) as e:
             return {'erro': str(e)}
+    if nome == 'listar_materias_geracao':
+        return {'materias': listar_materias_geracao(argumentos['concurso'])}
     if nome == 'listar_materias':
         return {'materias': listar_materias(argumentos['concurso'])}
     if nome == 'montar_simulado':

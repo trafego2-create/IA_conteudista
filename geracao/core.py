@@ -27,13 +27,13 @@ ALIAS_CONCURSO = {
 }
 
 
-def _normalizar_concurso(s: str) -> str:
+def _normalizar_texto(s: str) -> str:
     sem_acento = unicodedata.normalize('NFKD', s).encode('ascii', 'ignore').decode('ascii')
     return re.sub(r'[^a-z0-9]+', ' ', sem_acento.lower()).strip()
 
 
 def resolver_concurso(concurso: str) -> str:
-    return ALIAS_CONCURSO.get(_normalizar_concurso(concurso), concurso)
+    return ALIAS_CONCURSO.get(_normalizar_texto(concurso), concurso)
 
 SYSTEM_PROMPT_MESTRE_QUESTOES = """Você é um conteudista especializado em concursos públicos, escrevendo questões
 comentadas no padrão da plataforma Aprova Sim, com o mesmo nível de profundidade
@@ -359,15 +359,47 @@ def listar_temas(concurso: str) -> list[tuple]:
     return temas
 
 
+def listar_materias_geracao(concurso: str) -> list:
+    """Nomes de materia distintos no material_fonte do concurso (fonte usada pra geracao via
+    IA) - diferente de listar_materias, que e sourced de questoes ja aprovadas (usado pra
+    simulado). Usado pelo assistente quando o pedido de geracao menciona uma materia/bloco
+    especifico, pra descobrir o nome exato salvo no banco (ex.: usuario pede 'Bloco I', o nome
+    real e 'Op Bloco I')."""
+    supabase = get_supabase()
+    resultado = (
+        supabase.table('material_fonte')
+        .select('materia')
+        .ilike('concurso', resolver_concurso(concurso))
+        .execute()
+    )
+    return sorted({linha['materia'] for linha in resultado.data})
+
+
 def gerar_lote(
     concurso: str, quantidade: int, produto: str = 'mestre_questoes', model: str = 'gpt-4.1',
-    formato: str = None,
+    formato: str = None, materia: str = None,
 ) -> dict:
     """Gera `quantidade` questoes novas via IA, uma por tema em round-robin. Nunca reaproveita -
     Mestre em Questoes e sempre 100% gerado. Falhas pontuais (ex.: duplicata de hash) nao derrubam
     o lote inteiro, ficam listadas em 'falhas'. formato (opcional, so vale pra mestre_questoes):
-    'certo_errado' (padrao) ou 'abcde'."""
+    'certo_errado' (padrao) ou 'abcde'. materia (opcional) restringe a geracao a uma materia
+    especifica em vez de round-robin por todo o concurso - sem isso, um pedido tipo 'gere
+    questoes do Bloco I' pode sair com qualquer materia do concurso, nao so a pedida.
+    Casamento de materia e por substring (case/acento-insensitive) pra tolerar apelidos comuns
+    (ex.: usuario pede 'Bloco I', nome real no banco e 'Op Bloco I')."""
     temas = listar_temas(concurso)
+
+    if materia:
+        materia_norm = _normalizar_texto(materia)
+        temas_filtrados = [
+            (m, t) for m, t in temas
+            if materia_norm in _normalizar_texto(m) or _normalizar_texto(m) in materia_norm
+        ]
+        if not temas_filtrados:
+            raise MaterialNaoEncontrado(
+                f'nenhuma materia do material_fonte de concurso={concurso!r} bate com materia={materia!r}'
+            )
+        temas = temas_filtrados
 
     resultados = []
     falhas = []

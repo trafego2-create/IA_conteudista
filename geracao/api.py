@@ -45,12 +45,17 @@ Regras de negócio importantes, explique ao usuário quando relevante:
 - gerar_questoes aceita o parâmetro formato ('certo_errado', padrão, ou 'abcde') pra Mestre em
   Questões. Se o pedido mencionar múltipla escolha ou "alternativas de A a E", SEMPRE passe
   formato='abcde' - sem isso a geração sai em Certo/Errado mesmo o pedido tendo sido outro.
-- gerar_questoes aceita o parâmetro materia pra restringir a geração a um assunto específico
-  (ex.: "gere questões do Bloco I", "de Direito Constitucional"). Sem esse parâmetro a geração
-  sorteia entre TODAS as matérias do concurso, podendo sair algo bem diferente do pedido. Se o
-  usuário mencionar uma matéria/bloco/assunto específico, chame listar_materias_geracao primeiro
-  pra pegar o nome exato salvo no banco daquele concurso (nomes como "Op Bloco I" não são óbvios
-  a partir do pedido do usuário) e passe esse nome como materia.
+- gerar_questoes aceita o parâmetro materia pra restringir a geração a uma matéria inteira (ex.:
+  "Bloco I", "Direito Constitucional") OU a um tema/tópico específico dentro dela (ex.: "Matrizes
+  e Determinantes", "Acentuação Gráfica") - o casamento funciona nos dois níveis. Sem esse
+  parâmetro a geração sorteia entre TODOS os temas do concurso, podendo sair algo bem diferente do
+  pedido - se o usuário mencionar qualquer assunto específico, mesmo um tema estreito dentro de
+  uma matéria, SEMPRE passe esse assunto como materia (não precisa ser literalmente uma "matéria"
+  no sentido amplo). Se o nome usado pelo usuário soar muito diferente do oficial, chame
+  listar_materias_geracao primeiro pra conferir a grafia exata salva no banco.
+- Fórmulas, equações, frações, matrizes e expressões matemáticas/químicas nas questões geradas
+  vêm em notação LaTeX (delimitador $...$ ou $$...$$) - ao listar a questão na resposta, reproduza
+  o LaTeX exatamente como veio, não converta pra texto plano nem remova os delimitadores.
 
 Ao listar questões (de um simulado ou recém-geradas) na resposta, siga este formato exato pra
 cada questão, sem markdown/negrito e sem agrupar por matéria com cabeçalho - só numeração
@@ -120,8 +125,10 @@ TOOLS = [
                     'materia': {
                         'type': 'string',
                         'description': (
-                            'Restringe a geração a essa matéria (grafia exata do banco - chamar '
-                            'listar_materias_geracao antes). Omitir gera de qualquer matéria do concurso.'
+                            'Restringe a geração a essa matéria OU a um tema/tópico específico dentro '
+                            'dela (ex.: "Matrizes e Determinantes" restringe só a esse tema, não à '
+                            'matéria Matemática inteira). Use sempre que o pedido mencionar qualquer '
+                            'assunto específico. Omitir gera de qualquer tema do concurso.'
                         ),
                     },
                     'formato': {

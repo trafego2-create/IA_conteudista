@@ -90,7 +90,12 @@ REGRAS OBRIGATÓRIAS:
    profundidade e estrutura do comentário (é uma questão real de banca, revisada
    por humano). Nunca copie seu conteúdo nem cite a lei mencionada nele - a
    única fonte válida de citação continua sendo o TRECHO.
-4. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON.
+4. Fórmulas, equações, frações, matrizes, expressões químicas e qualquer notação
+   matemática devem estar em LaTeX: delimitador $...$ para notação dentro de uma
+   frase, $$...$$ quando a fórmula ocupa a linha inteira sozinha. Nunca escreva
+   fórmula como texto puro (ex.: "S_n = n/2(a_1+a_n)") quando ela pode ser LaTeX
+   (ex.: "$S_n = \\frac{n}{2}(a_1 + a_n)$").
+5. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON.
 
 FORMATO DE SAÍDA (JSON):
 {
@@ -128,7 +133,13 @@ REGRAS OBRIGATÓRIAS:
    profundidade e estrutura do comentário (é uma questão real de banca, revisada
    por humano). Nunca copie seu conteúdo nem cite a lei mencionada nele - a
    única fonte válida de citação continua sendo o TRECHO.
-5. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON.
+5. Fórmulas, equações, frações, matrizes, expressões químicas e qualquer notação
+   matemática (no enunciado, nas alternativas ou no comentário) devem estar em
+   LaTeX: delimitador $...$ para notação dentro de uma frase, $$...$$ quando a
+   fórmula ocupa a linha inteira sozinha. Nunca escreva fórmula como texto puro
+   (ex.: "S_n = n/2(a_1+a_n)") quando ela pode ser LaTeX (ex.: "$S_n =
+   \\frac{n}{2}(a_1 + a_n)$").
+6. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON.
 
 FORMATO DE SAÍDA (JSON):
 {
@@ -169,7 +180,10 @@ REGRAS OBRIGATÓRIAS:
    parafraseie o texto legal citado.
 3. A pergunta deve ter resposta objetiva e curta (não é questão certo/errado nem
    de múltipla escolha - é flashcard).
-4. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON.
+4. Fórmulas, equações, frações, matrizes, expressões químicas e qualquer notação
+   matemática devem estar em LaTeX: delimitador $...$ para notação dentro de uma
+   frase, $$...$$ quando a fórmula ocupa a linha inteira sozinha.
+5. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON.
 
 FORMATO DE SAÍDA (JSON):
 {
@@ -423,22 +437,25 @@ def gerar_lote(
     """Gera `quantidade` questoes novas via IA, uma por tema em round-robin. Nunca reaproveita -
     Mestre em Questoes e sempre 100% gerado. Falhas pontuais (ex.: duplicata de hash) nao derrubam
     o lote inteiro, ficam listadas em 'falhas'. formato (opcional, so vale pra mestre_questoes):
-    'certo_errado' (padrao) ou 'abcde'. materia (opcional) restringe a geracao a uma materia
-    especifica em vez de round-robin por todo o concurso - sem isso, um pedido tipo 'gere
-    questoes do Bloco I' pode sair com qualquer materia do concurso, nao so a pedida.
-    Casamento de materia e por substring (case/acento-insensitive) pra tolerar apelidos comuns
-    (ex.: usuario pede 'Bloco I', nome real no banco e 'Op Bloco I')."""
+    'certo_errado' (padrao) ou 'abcde'. materia (opcional) restringe a geracao a uma materia OU a
+    um tema especifico dentro dela (ex.: 'Bloco I' bate qualquer tema de 'Op Bloco I', mas
+    'Matrizes e Determinantes' bate so o tema exato) - sem isso, um pedido de tema especifico podia
+    sair com qualquer assunto da materia inteira (bug real: pedido de 'Matrizes e Determinantes'
+    saia com Conjuntos, Sistemas de Equacao etc., porque so existia filtro por materia). tema e
+    materia vem sempre do Sumario das Apostilas Esquematizadas (unica fonte de material_fonte,
+    listar_temas ja usa so essa tabela), nunca de outro material de referencia. Casamento e por
+    token normalizado (case/acento/numeral-insensitive), nao substring crua."""
     temas = listar_temas(concurso)
 
     if materia:
         materia_norm = _normalizar_texto(materia)
         temas_filtrados = [
             (m, t) for m, t in temas
-            if _materia_bate(materia_norm, _normalizar_texto(m))
+            if _materia_bate(materia_norm, _normalizar_texto(m)) or _materia_bate(materia_norm, _normalizar_texto(t))
         ]
         if not temas_filtrados:
             raise MaterialNaoEncontrado(
-                f'nenhuma materia do material_fonte de concurso={concurso!r} bate com materia={materia!r}'
+                f'nenhuma materia/tema do material_fonte de concurso={concurso!r} bate com materia={materia!r}'
             )
         temas = temas_filtrados
 

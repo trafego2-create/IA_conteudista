@@ -355,6 +355,30 @@ def verificar_gabarito(openai_client, model: str, trecho: str, questao: dict) ->
     return bool(resultado.get('bate')), resultado.get('motivo') or ''
 
 
+def embaralhar_alternativas(questao: dict) -> None:
+    """Reordena as letras das alternativas DEPOIS de geradas, em vez de forcar o modelo a mirar
+    numa letra especifica antes de gerar. Forcar a letra empurrava o modelo a as vezes inventar
+    ou errar a conta pra fazer a resposta calculada bater com a letra pedida (achado real: um
+    determinante calculado como 11 foi forcado a virar "9" so pra bater com a letra que a
+    instrucao exigia). Embaralhar so a ordem, sem o modelo saber, corrige o vies de letra (sem
+    isso a correta sai quase sempre na A) sem nenhum risco pro calculo - o CONTEUDO de cada
+    alternativa nao muda, so o rotulo A-E."""
+    alternativas = questao.get('alternativas')
+    gabarito = questao.get('gabarito')
+    if not alternativas or gabarito not in alternativas:
+        return
+    pares = list(alternativas.items())
+    random.shuffle(pares)
+    nova_alternativas = {}
+    novo_gabarito = None
+    for nova_letra, (letra_original, texto) in zip('ABCDE', pares):
+        nova_alternativas[nova_letra] = texto
+        if letra_original == gabarito:
+            novo_gabarito = nova_letra
+    questao['alternativas'] = nova_alternativas
+    questao['gabarito'] = novo_gabarito
+
+
 class MaterialNaoEncontrado(Exception):
     pass
 
@@ -473,11 +497,7 @@ def gerar_questao(
         evitar=buscar_enunciados_existentes(supabase, registro, produto),
         instrucoes=formatar_instrucoes_extra(instrucoes),
     )
-    if formato_resolvido == 'abcde':
-        # sem isso o modelo poe a correta na letra A quase sempre (viés real medido: 4 de 4
-        # questoes de teste sairam com gabarito A) - o sorteio no codigo e a fonte de verdade
-        user_prompt += f'\nA alternativa correta DEVE ser a letra {random.choice("ABCDE")}.'
-    elif formato_resolvido == 'certo_errado':
+    if formato_resolvido == 'certo_errado':
         # mesmo vies do abcde: sem sorteio o modelo tende a montar so "pegadinha" (gabarito ERRADO)
         user_prompt += f'\nO gabarito desta questão DEVE ser {random.choice(["CERTO", "ERRADO"])}.'
 
@@ -490,6 +510,8 @@ def gerar_questao(
         ],
     )
     questao = json.loads(resposta.choices[0].message.content)
+    if formato_resolvido == 'abcde':
+        embaralhar_alternativas(questao)
 
     texto_para_validar = questao.get('comentario') or questao.get('resposta', '')
     citacao_ok = validar_citacao(texto_para_validar, trecho, exigir_citacao)

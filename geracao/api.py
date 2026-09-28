@@ -56,6 +56,10 @@ Regras de negócio importantes, explique ao usuário quando relevante:
 - Fórmulas, equações, frações, matrizes e expressões matemáticas/químicas nas questões geradas
   vêm em notação LaTeX (delimitador $...$ ou $$...$$) - ao listar a questão na resposta, reproduza
   o LaTeX exatamente como veio, não converta pra texto plano nem remova os delimitadores.
+- gerar_questoes aceita o parâmetro instrucoes pra qualquer detalhe do pedido que não seja
+  concurso/matéria/formato (ex.: "que envolvam cálculo", "nível difícil", "estilo de uma banca
+  específica"). SEMPRE que o usuário pedir algo além do básico, repasse esse detalhe em
+  instrucoes, quase literalmente - sem isso o detalhe se perde e a questão sai genérica.
 
 Ao listar questões (de um simulado ou recém-geradas) na resposta, siga este formato exato pra
 cada questão, sem markdown/negrito e sem agrupar por matéria com cabeçalho - só numeração
@@ -140,6 +144,17 @@ TOOLS = [
                             'escolha ou "alternativas de A a E".'
                         ),
                     },
+                    'instrucoes': {
+                        'type': 'string',
+                        'description': (
+                            'Qualquer detalhe do pedido que não seja concurso/matéria/formato - '
+                            'ex.: "que envolvam cálculo com matrizes", "nível difícil", "estilo '
+                            'Cesgranrio", "sem pegadinha". Sem isso esse detalhe se perde: os '
+                            'outros parâmetros não carregam texto livre. Repasse o pedido do '
+                            'usuário quase literalmente aqui sempre que ele pedir algo além do '
+                            'básico.'
+                        ),
+                    },
                 },
                 'required': ['concurso', 'quantidade'],
             },
@@ -216,6 +231,7 @@ def executar_ferramenta(nome: str, argumentos: dict) -> dict:
                 argumentos['concurso'], argumentos['quantidade'],
                 argumentos.get('produto', 'mestre_questoes'),
                 formato=argumentos.get('formato'), materia=argumentos.get('materia'),
+                instrucoes=argumentos.get('instrucoes'),
             )
         except (MaterialNaoEncontrado, ProdutoInvalido) as e:
             return {'erro': str(e)}

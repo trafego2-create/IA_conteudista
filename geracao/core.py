@@ -115,7 +115,7 @@ TRECHO (fonte de verdade, não usar nada fora daqui):
 \"\"\"
 {trecho}
 \"\"\"
-{exemplo_calibracao}{evitar}
+{exemplo_calibracao}{evitar}{instrucoes}
 Gere 1 questão comentada no formato certo_errado sobre este trecho."""
 
 SYSTEM_PROMPT_MESTRE_QUESTOES_ABCDE = """Você é um conteudista especializado em concursos públicos, escrevendo questões
@@ -161,7 +161,7 @@ TRECHO (fonte de verdade, não usar nada fora daqui):
 \"\"\"
 {trecho}
 \"\"\"
-{exemplo_calibracao}{evitar}
+{exemplo_calibracao}{evitar}{instrucoes}
 Gere 1 questão comentada de múltipla escolha (5 alternativas, A a E) sobre este trecho."""
 
 BLOCO_EXEMPLO_CALIBRACAO = """
@@ -175,6 +175,11 @@ BLOCO_EVITAR_REPETICAO = """
 QUESTÕES JÁ EXISTENTES SOBRE ESTE TEMA (não repita o mesmo subassunto, conceito cobrado
 ou tipo de conta - escolha outro ponto do TRECHO):
 {lista}
+"""
+
+BLOCO_INSTRUCOES_EXTRA = """
+INSTRUÇÃO ESPECÍFICA DESTE PEDIDO (siga à risca, além das regras acima):
+{instrucoes}
 """
 
 SYSTEM_PROMPT_REVISAO_FAROL = """Você é um conteudista especializado em concursos públicos, escrevendo flashcards
@@ -209,7 +214,7 @@ TRECHO (fonte de verdade, não usar nada fora daqui):
 \"\"\"
 {trecho}
 \"\"\"
-{evitar}
+{evitar}{instrucoes}
 Gere 1 flashcard (pergunta e resposta) de revisão sobre este trecho."""
 
 PRODUTOS = {
@@ -352,9 +357,19 @@ def buscar_enunciados_existentes(supabase, registro: dict, produto: str, limite:
     return BLOCO_EVITAR_REPETICAO.format(lista=lista)
 
 
+def formatar_instrucoes_extra(instrucoes: str) -> str:
+    """Bloco de instrucao livre digitada pelo usuario no chat (ex.: 'que envolvam calculo com
+    matrizes', 'nivel dificil', 'estilo Cesgranrio') - sem isso, qualquer pedido que nao seja
+    concurso/materia/formato se perdia ao virar chamada de gerar_questoes, porque a ferramenta
+    so aceitava esses campos fixos."""
+    if not instrucoes:
+        return ''
+    return BLOCO_INSTRUCOES_EXTRA.format(instrucoes=instrucoes.strip())
+
+
 def gerar_questao(
     materia: str, tema: str, produto: str = 'mestre_questoes', model: str = 'gpt-4.1',
-    concurso: str = None, formato: str = None,
+    concurso: str = None, formato: str = None, instrucoes: str = None,
 ) -> dict:
     if produto not in PRODUTOS:
         raise ProdutoInvalido(f'produto deve ser um de {list(PRODUTOS)}, recebido {produto!r}')
@@ -386,6 +401,7 @@ def gerar_questao(
         concurso=registro['concurso'], materia=registro['materia'],
         tema=registro['tema'], trecho=trecho, exemplo_calibracao=exemplo_calibracao,
         evitar=buscar_enunciados_existentes(supabase, registro, produto),
+        instrucoes=formatar_instrucoes_extra(instrucoes),
     )
     if formato_resolvido == 'abcde':
         # sem isso o modelo poe a correta na letra A quase sempre (viés real medido: 4 de 4
@@ -478,7 +494,7 @@ def listar_materias_geracao(concurso: str) -> list:
 
 def gerar_lote(
     concurso: str, quantidade: int, produto: str = 'mestre_questoes', model: str = 'gpt-4.1',
-    formato: str = None, materia: str = None,
+    formato: str = None, materia: str = None, instrucoes: str = None,
 ) -> dict:
     """Gera `quantidade` questoes novas via IA, uma por tema em round-robin. Nunca reaproveita -
     Mestre em Questoes e sempre 100% gerado. Falhas pontuais (ex.: duplicata de hash) nao derrubam
@@ -509,7 +525,9 @@ def gerar_lote(
     falhas = []
     for materia, tema in itertools.islice(itertools.cycle(temas), quantidade):
         try:
-            resultados.append(gerar_questao(materia, tema, produto, model, concurso=concurso, formato=formato))
+            resultados.append(gerar_questao(
+                materia, tema, produto, model, concurso=concurso, formato=formato, instrucoes=instrucoes,
+            ))
         except Exception as e:
             falhas.append({'materia': materia, 'tema': tema, 'erro': str(e)})
 

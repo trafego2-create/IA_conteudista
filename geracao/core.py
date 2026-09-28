@@ -94,7 +94,8 @@ REGRAS OBRIGATÓRIAS:
    matemática devem estar em LaTeX: delimitador $...$ para notação dentro de uma
    frase, $$...$$ quando a fórmula ocupa a linha inteira sozinha. Nunca escreva
    fórmula como texto puro (ex.: "S_n = n/2(a_1+a_n)") quando ela pode ser LaTeX
-   (ex.: "$S_n = \\frac{n}{2}(a_1 + a_n)$").
+   (ex.: "$S_n = \\frac{n}{2}(a_1 + a_n)$"). Matrizes sempre com colchetes, usando
+   \\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix} (nunca parênteses nem texto).
 5. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON.
 
 FORMATO DE SAÍDA (JSON):
@@ -138,7 +139,8 @@ REGRAS OBRIGATÓRIAS:
    LaTeX: delimitador $...$ para notação dentro de uma frase, $$...$$ quando a
    fórmula ocupa a linha inteira sozinha. Nunca escreva fórmula como texto puro
    (ex.: "S_n = n/2(a_1+a_n)") quando ela pode ser LaTeX (ex.: "$S_n =
-   \\frac{n}{2}(a_1 + a_n)$").
+   \\frac{n}{2}(a_1 + a_n)$"). Matrizes sempre com colchetes, usando
+   \\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix} (nunca parênteses nem texto).
 6. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON.
 
 FORMATO DE SAÍDA (JSON):
@@ -182,7 +184,8 @@ REGRAS OBRIGATÓRIAS:
    de múltipla escolha - é flashcard).
 4. Fórmulas, equações, frações, matrizes, expressões químicas e qualquer notação
    matemática devem estar em LaTeX: delimitador $...$ para notação dentro de uma
-   frase, $$...$$ quando a fórmula ocupa a linha inteira sozinha.
+   frase, $$...$$ quando a fórmula ocupa a linha inteira sozinha. Matrizes sempre
+   com colchetes, usando \\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}.
 5. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON.
 
 FORMATO DE SAÍDA (JSON):

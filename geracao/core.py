@@ -285,6 +285,76 @@ def validar_citacao(texto: str, trecho: str, exigir_citacao: bool) -> bool:
     return True
 
 
+SYSTEM_PROMPT_VERIFICAR_GABARITO = """Você é um revisor técnico rigoroso de questões de concurso. Sua única
+tarefa é conferir se o GABARITO INFORMADO de uma questão está correto.
+
+REGRAS:
+1. Resolva a questão do zero, usando só o TRECHO como fonte de conteúdo. NÃO confie no
+   COMENTÁRIO fornecido - ele foi escrito pela mesma IA que pode ter errado, e pode conter
+   uma justificativa forçada para um gabarito incorreto.
+2. Se a questão envolver cálculo (matemática, física, química, financeiro etc.), refaça a
+   conta você mesmo, passo a passo, e só então compare com o GABARITO INFORMADO.
+3. Se, ao resolver, você concluir que o GABARITO INFORMADO está errado (ou que nenhuma das
+   alternativas está correta, ou que mais de uma está), marque "bate": false.
+4. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON.
+
+FORMATO DE SAÍDA (JSON):
+{
+  "resolucao": "raciocínio/conta refeitos do zero, resumido",
+  "gabarito_calculado": "sua resposta, no mesmo formato do GABARITO INFORMADO",
+  "bate": true ou false,
+  "motivo": "curto, preenchido sempre que bate=false"
+}"""
+
+USER_PROMPT_VERIFICAR_GABARITO = """TRECHO (fonte de verdade):
+\"\"\"
+{trecho}
+\"\"\"
+
+ENUNCIADO:
+{enunciado}
+{alternativas_bloco}
+COMENTÁRIO GERADO (não confie cegamente, pode justificar um erro):
+{comentario}
+
+GABARITO INFORMADO: {gabarito}
+
+Resolva a questão de novo do zero e confira se o gabarito informado está correto."""
+
+
+def formatar_alternativas_bloco(questao: dict) -> str:
+    alternativas = questao.get('alternativas')
+    if not alternativas:
+        return ''
+    linhas = '\n'.join(f'{letra}) {texto}' for letra, texto in sorted(alternativas.items()))
+    return f'\nALTERNATIVAS:\n{linhas}\n'
+
+
+def verificar_gabarito(openai_client, model: str, trecho: str, questao: dict) -> tuple:
+    """Segunda chamada independente, so pra mestre_questoes: resolve a questao do zero (sem
+    confiar no comentario gerado, que pode estar errado) e confere se o gabarito bate. Achado
+    real que motivou isso: um teste gerou um determinante calculado errado e a mesma IA forcou
+    o gabarito pra uma alternativa que nao batia, inventando justificativa no comentario - so
+    foi barrado por coincidencia (a citacao nao bateu), nao pela conta em si. Sem essa segunda
+    chamada, uma questao assim ia pra fila de revisao humana parecendo correta."""
+    gabarito = questao.get('gabarito') or questao.get('resposta')
+    user_prompt = USER_PROMPT_VERIFICAR_GABARITO.format(
+        trecho=trecho, enunciado=questao['enunciado'],
+        alternativas_bloco=formatar_alternativas_bloco(questao),
+        comentario=questao.get('comentario') or '', gabarito=gabarito,
+    )
+    resposta = openai_client.chat.completions.create(
+        model=model,
+        response_format={'type': 'json_object'},
+        messages=[
+            {'role': 'system', 'content': SYSTEM_PROMPT_VERIFICAR_GABARITO},
+            {'role': 'user', 'content': user_prompt},
+        ],
+    )
+    resultado = json.loads(resposta.choices[0].message.content)
+    return bool(resultado.get('bate')), resultado.get('motivo') or ''
+
+
 class MaterialNaoEncontrado(Exception):
     pass
 
@@ -423,8 +493,23 @@ def gerar_questao(
 
     texto_para_validar = questao.get('comentario') or questao.get('resposta', '')
     citacao_ok = validar_citacao(texto_para_validar, trecho, exigir_citacao)
-    status = 'pendente_revisao' if citacao_ok else 'rejeitada'
-    motivo_rejeicao = None if citacao_ok else 'citacao legal nao encontrada literalmente no material_fonte'
+
+    gabarito_ok, motivo_gabarito = True, ''
+    if citacao_ok and produto == 'mestre_questoes':
+        # so verifica gabarito se a citacao ja passou (economiza a chamada quando ja vai ser
+        # rejeitada de qualquer jeito) e so pra mestre_questoes (tem gabarito objetivo pra
+        # conferir; revisao_farol e resposta livre, sem "certo/errado" pra recalcular)
+        gabarito_ok, motivo_gabarito = verificar_gabarito(openai_client, model, trecho, questao)
+
+    if not citacao_ok:
+        status = 'rejeitada'
+        motivo_rejeicao = 'citacao legal nao encontrada literalmente no material_fonte'
+    elif not gabarito_ok:
+        status = 'rejeitada'
+        motivo_rejeicao = f'verificacao independente do gabarito nao bateu: {motivo_gabarito}'
+    else:
+        status = 'pendente_revisao'
+        motivo_rejeicao = None
 
     hash_conteudo = hashlib.sha256(questao['enunciado'].encode('utf-8')).hexdigest()
 
@@ -449,6 +534,7 @@ def gerar_questao(
         'id': resultado.data[0]['id'],
         'status': status,
         'citacao_validada': citacao_ok,
+        'gabarito_validado': gabarito_ok,
         **questao,
     }
 

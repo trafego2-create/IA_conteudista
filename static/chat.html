@@ -301,7 +301,9 @@
     } else if (questao.status) {
       const div = document.createElement('div');
       div.className = 'questao-decisao ' + questao.status;
-      div.textContent = questao.status === 'rejeitada' ? 'Rejeitada automaticamente (citação não confere) ✗' : questao.status;
+      div.textContent = questao.status === 'rejeitada'
+        ? 'Rejeitada automaticamente' + (questao.motivo_rejeicao ? ' (' + questao.motivo_rejeicao + ')' : '') + ' ✗'
+        : questao.status;
       card.appendChild(div);
     }
 

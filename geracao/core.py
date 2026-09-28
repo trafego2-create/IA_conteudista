@@ -535,6 +535,7 @@ def gerar_questao(
         'status': status,
         'citacao_validada': citacao_ok,
         'gabarito_validado': gabarito_ok,
+        'motivo_rejeicao': motivo_rejeicao,
         **questao,
     }
 

@@ -391,6 +391,9 @@ def gerar_questao(
         # sem isso o modelo poe a correta na letra A quase sempre (viés real medido: 4 de 4
         # questoes de teste sairam com gabarito A) - o sorteio no codigo e a fonte de verdade
         user_prompt += f'\nA alternativa correta DEVE ser a letra {random.choice("ABCDE")}.'
+    elif formato_resolvido == 'certo_errado':
+        # mesmo vies do abcde: sem sorteio o modelo tende a montar so "pegadinha" (gabarito ERRADO)
+        user_prompt += f'\nO gabarito desta questão DEVE ser {random.choice(["CERTO", "ERRADO"])}.'
 
     resposta = openai_client.chat.completions.create(
         model=model,

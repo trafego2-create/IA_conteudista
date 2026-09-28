@@ -107,6 +107,30 @@ def find_all_fuzzy(full_stripped, index_map, tema):
         start = pos + 1
     return positions
 
+def preferir_titulo_exato(candidatos, full_norm, tema):
+    """Entre varios matches de um titulo do sumario, prefere os que batem com a MESMA
+    capitalizacao do sumario. Menção no meio de frase (ex.: '...utilizado para resolver
+    sistemas lineares') tem o mesmo texto do titulo do proximo tema, so que em minuscula, e
+    quando o PDF nao tem numero de pagina detectavel todos os candidatos empatam na distancia
+    de pagina e ganhava o primeiro - cortando o tema anterior no meio. Aceita capitalizacao
+    identica a do sumario OU tudo em maiuscula (titulo de secao no corpo, mesmo quando o
+    sumario esta em Title Case); descarta so o que parece texto corrido. Se nenhum candidato
+    passa, mantem todos."""
+    alvo = ''.join(ch for ch in tema if ch.isalnum())
+    exatos = []
+    for pos in candidatos:
+        lidos = []
+        for ch in full_norm[pos:pos + len(tema) * 2 + 10]:
+            if ch.isalnum():
+                lidos.append(ch)
+                if len(lidos) == len(alvo):
+                    break
+        lido = ''.join(lidos)
+        if lido == alvo or lido == alvo.upper():
+            exatos.append(pos)
+    return exatos or candidatos
+
+
 def page_number_of(text):
     m = re.match(r'^CONCURSOS\s*\n(\d+)\s*\n', text)
     return int(m.group(1)) if m else None
@@ -161,6 +185,7 @@ def parse_apostila(path, concurso, arquivo_origem):
                 continue
             valid = [c for c in candidates if c > prev_pos]
             pool = valid if valid else candidates
+            pool = preferir_titulo_exato(pool, full_norm, tema)
             best = min(pool, key=lambda pos: abs((page_of(pos) or expected_page) - expected_page))
             anchors.append((best, tema))
             prev_pos = best
@@ -234,6 +259,7 @@ def parse_apostila_single(path, concurso, materia, arquivo_origem):
             continue
         valid = [c for c in candidates if c > prev_pos]
         pool = valid if valid else candidates
+        pool = preferir_titulo_exato(pool, full_norm, tema)
         best = min(pool, key=lambda pos: abs((page_of(pos) or expected_page) - expected_page))
         anchors.append((best, tema))
         prev_pos = best

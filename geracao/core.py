@@ -2,6 +2,7 @@ import hashlib
 import itertools
 import json
 import os
+import random
 import re
 import unicodedata
 from datetime import datetime, timezone
@@ -114,7 +115,7 @@ TRECHO (fonte de verdade, não usar nada fora daqui):
 \"\"\"
 {trecho}
 \"\"\"
-{exemplo_calibracao}
+{exemplo_calibracao}{evitar}
 Gere 1 questão comentada no formato certo_errado sobre este trecho."""
 
 SYSTEM_PROMPT_MESTRE_QUESTOES_ABCDE = """Você é um conteudista especializado em concursos públicos, escrevendo questões
@@ -160,7 +161,7 @@ TRECHO (fonte de verdade, não usar nada fora daqui):
 \"\"\"
 {trecho}
 \"\"\"
-{exemplo_calibracao}
+{exemplo_calibracao}{evitar}
 Gere 1 questão comentada de múltipla escolha (5 alternativas, A a E) sobre este trecho."""
 
 BLOCO_EXEMPLO_CALIBRACAO = """
@@ -168,6 +169,12 @@ EXEMPLO DE REFERÊNCIA (questão real de banca, só para calibrar tom/estilo - n
 Enunciado: {enunciado}
 Gabarito: {gabarito}
 Comentário: {comentario}
+"""
+
+BLOCO_EVITAR_REPETICAO = """
+QUESTÕES JÁ EXISTENTES SOBRE ESTE TEMA (não repita o mesmo subassunto, conceito cobrado
+ou tipo de conta - escolha outro ponto do TRECHO):
+{lista}
 """
 
 SYSTEM_PROMPT_REVISAO_FAROL = """Você é um conteudista especializado em concursos públicos, escrevendo flashcards
@@ -202,7 +209,7 @@ TRECHO (fonte de verdade, não usar nada fora daqui):
 \"\"\"
 {trecho}
 \"\"\"
-
+{evitar}
 Gere 1 flashcard (pergunta e resposta) de revisão sobre este trecho."""
 
 PRODUTOS = {
@@ -254,15 +261,22 @@ def _normalizar_para_comparacao_citacao(s: str) -> str:
     return s.upper()
 
 
+PADRAO_RETICENCIAS = re.compile(r'\[\s*(?:\.\.\.|…)\s*\]|\.\.\.|…')
+
+
 def validar_citacao(texto: str, trecho: str, exigir_citacao: bool) -> bool:
     citacoes = [g for m in PADRAO_CITACAO.finditer(texto) for g in m.groups() if g]
     if not citacoes:
         return not exigir_citacao
     trecho_norm = _normalizar_para_comparacao_citacao(trecho)
     for citacao in citacoes:
-        citacao_norm = _normalizar_para_comparacao_citacao(citacao)
-        if citacao_norm not in trecho_norm:
-            return False
+        # o modelo costuma emendar dois trechos literais com "[...]" numa unica citacao; o
+        # marcador em si nao existe no material, entao valida cada pedaco separadamente
+        # (cada pedaco continua tendo que ser literal - nada inventado passa por aqui)
+        for pedaco in PADRAO_RETICENCIAS.split(citacao):
+            pedaco_norm = _normalizar_para_comparacao_citacao(pedaco)
+            if pedaco_norm and pedaco_norm not in trecho_norm:
+                return False
     return True
 
 
@@ -317,6 +331,27 @@ def buscar_exemplo_calibracao(supabase, concurso: str, materia: str, formato: st
     return BLOCO_EXEMPLO_CALIBRACAO.format(**exemplo)
 
 
+def buscar_enunciados_existentes(supabase, registro: dict, produto: str, limite: int = 8) -> str:
+    """Enunciados ja gerados pra esse mesmo tema (inclui os do lote em andamento, que ja foram
+    gravados) pra o modelo variar o angulo - sem isso, pedir N questoes do mesmo tema manda
+    o mesmo trecho N vezes e a tendencia e sair N questoes sobre o mesmo ponto."""
+    resultado = (
+        supabase.table('questoes')
+        .select('enunciado')
+        .eq('concurso', registro['concurso'])
+        .eq('materia', registro['materia'])
+        .eq('tema', registro['tema'])
+        .eq('origem', produto)
+        .order('id', desc=True)
+        .limit(limite)
+        .execute()
+    )
+    if not resultado.data:
+        return ''
+    lista = '\n'.join(f"- {r['enunciado'][:300]}" for r in resultado.data)
+    return BLOCO_EVITAR_REPETICAO.format(lista=lista)
+
+
 def gerar_questao(
     materia: str, tema: str, produto: str = 'mestre_questoes', model: str = 'gpt-4.1',
     concurso: str = None, formato: str = None,
@@ -350,7 +385,12 @@ def gerar_questao(
     user_prompt = config['user_prompt'].format(
         concurso=registro['concurso'], materia=registro['materia'],
         tema=registro['tema'], trecho=trecho, exemplo_calibracao=exemplo_calibracao,
+        evitar=buscar_enunciados_existentes(supabase, registro, produto),
     )
+    if formato_resolvido == 'abcde':
+        # sem isso o modelo poe a correta na letra A quase sempre (viés real medido: 4 de 4
+        # questoes de teste sairam com gabarito A) - o sorteio no codigo e a fonte de verdade
+        user_prompt += f'\nA alternativa correta DEVE ser a letra {random.choice("ABCDE")}.'
 
     resposta = openai_client.chat.completions.create(
         model=model,

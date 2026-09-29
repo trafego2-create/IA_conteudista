@@ -86,7 +86,11 @@ REGRAS OBRIGATÓRIAS:
    artigo ou instrução normativa que não apareça literalmente no TRECHO.
 2. Qualquer citação legal no campo "comentario" deve ser uma transcrição literal
    de um trecho do TRECHO fornecido, delimitada entre aspas retas (" ").
-   Não parafraseie o texto legal citado.
+   Não parafraseie o texto legal citado. NUNCA coloque entre aspas retas uma fórmula,
+   valor ou dado que você mesmo inventou para compor o enunciado (ex.: uma lei de
+   formação ou um número que você escolheu) - aspas retas são só para texto que
+   existe literalmente no TRECHO; dado inventado pra esta questão específica vai
+   sem aspas.
 3. Se a afirmação do enunciado envolver cálculo (matemático, financeiro, lógico etc.), resolva
    por completo no campo "resolucao" ANTES de decidir o gabarito - mostre a conta passo a
    passo, chegue num valor final exato, e só então compare com o que o enunciado afirma para
@@ -137,7 +141,11 @@ REGRAS OBRIGATÓRIAS:
    artigo ou instrução normativa que não apareça literalmente no TRECHO.
 2. Qualquer citação legal no campo "comentario" deve ser uma transcrição literal
    de um trecho do TRECHO fornecido, delimitada entre aspas retas (" ").
-   Não parafraseie o texto legal citado.
+   Não parafraseie o texto legal citado. NUNCA coloque entre aspas retas uma fórmula,
+   valor ou dado que você mesmo inventou para compor o enunciado (ex.: uma lei de
+   formação ou um número que você escolheu) - aspas retas são só para texto que
+   existe literalmente no TRECHO; dado inventado pra esta questão específica vai
+   sem aspas.
 3. Se a questão envolver cálculo (matemático, financeiro, lógico etc.), resolva-a por completo
    no campo "resolucao" ANTES de escrever as alternativas - mostre a conta passo a passo e
    chegue num valor final exato. Só depois de ter esse valor final, monte as 5 alternativas:
@@ -284,9 +292,14 @@ def _normalizar_para_comparacao_citacao(s: str) -> str:
     'A∪B') e indicador ordinal/travessao (13º vs 13°, − vs – vs -) sao trocados com frequencia
     real entre o texto extraido do PDF de origem e o jeito que o modelo reproduz a citacao,
     sem mudar o sentido - normalizar isso evita falso-negativo numa citacao genuinamente
-    verbatim, sem abrir mao de pegar citacao realmente inventada (conteudo ausente do trecho)."""
+    verbatim, sem abrir mao de pegar citacao realmente inventada (conteudo ausente do trecho).
+    Delimitador de LaTeX ($...$, \\(...\\), \\[...\\]) tambem e removido - o modelo as vezes
+    envolve uma formula em LaTeX mesmo dentro de uma citacao entre aspas (regra de formatacao
+    matematica), e o delimitador em si nunca existe no material_fonte puro."""
     s = re.sub(r'[−–—]', '-', s)
     s = re.sub(r'[°ºª]', '', s)
+    s = re.sub(r'\\[\[\]()]', '', s)
+    s = s.replace('$', '')
     s = re.sub(r'\s+', '', s)
     return s.upper()
 

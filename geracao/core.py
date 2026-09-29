@@ -398,12 +398,33 @@ def embaralhar_alternativas(questao: dict) -> None:
     random.shuffle(pares)
     nova_alternativas = {}
     novo_gabarito = None
+    mapa_letras = {}
     for nova_letra, (letra_original, texto) in zip('ABCDE', pares):
         nova_alternativas[nova_letra] = texto
+        mapa_letras[letra_original] = nova_letra
         if letra_original == gabarito:
             novo_gabarito = nova_letra
     questao['alternativas'] = nova_alternativas
     questao['gabarito'] = novo_gabarito
+    # o comentario (e a resolucao, se houver) foi escrito pelo modelo citando as letras
+    # ORIGINAIS, antes do embaralhamento - sem isso, o texto podia terminar em "a alternativa A
+    # esta correta" enquanto o campo gabarito (ja embaralhado) apontava outra letra (achado real:
+    # 2 de 9 questoes de um lote de teste tinham exatamente essa contradicao).
+    for campo in ('comentario', 'resolucao'):
+        texto_campo = questao.get(campo)
+        if texto_campo:
+            questao[campo] = _remapear_letras_alternativas(texto_campo, mapa_letras)
+
+
+_PADRAO_REFERENCIA_LETRA = re.compile(
+    r'((?:[Aa]lternativa|[Ll]etra|[Oo]p[cç][aã]o|[Ii]tem)\s+)([A-Ea-e])\b'
+)
+
+
+def _remapear_letras_alternativas(texto: str, mapa_letras: dict) -> str:
+    def substituir(m):
+        return m.group(1) + mapa_letras.get(m.group(2).upper(), m.group(2))
+    return _PADRAO_REFERENCIA_LETRA.sub(substituir, texto)
 
 
 class MaterialNaoEncontrado(Exception):

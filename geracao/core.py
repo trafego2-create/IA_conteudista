@@ -86,11 +86,12 @@ REGRAS OBRIGATÓRIAS:
    artigo ou instrução normativa que não apareça literalmente no TRECHO.
 2. Qualquer citação legal no campo "comentario" deve ser uma transcrição literal
    de um trecho do TRECHO fornecido, delimitada entre aspas retas (" ").
-   Não parafraseie o texto legal citado. NUNCA coloque entre aspas retas uma fórmula,
-   valor ou dado que você mesmo inventou para compor o enunciado (ex.: uma lei de
-   formação ou um número que você escolheu) - aspas retas são só para texto que
-   existe literalmente no TRECHO; dado inventado pra esta questão específica vai
-   sem aspas.
+   Não parafraseie o texto legal citado. NUNCA coloque entre aspas retas nada que você
+   mesmo produziu: nem um dado/fórmula inventado para compor o enunciado, nem o
+   RESULTADO FINAL que você calculou (ex.: não escreva algo como 'o valor correto é
+   "105/128"' - o resultado do seu próprio cálculo nunca vai entre aspas retas, mesmo
+   estando certo). Aspas retas são exclusivamente para texto que existe literalmente
+   no TRECHO fornecido.
 3. Se a afirmação do enunciado envolver cálculo (matemático, financeiro, lógico etc.), resolva
    por completo no campo "resolucao" ANTES de decidir o gabarito - mostre a conta passo a
    passo, chegue num valor final exato, e só então compare com o que o enunciado afirma para
@@ -141,11 +142,12 @@ REGRAS OBRIGATÓRIAS:
    artigo ou instrução normativa que não apareça literalmente no TRECHO.
 2. Qualquer citação legal no campo "comentario" deve ser uma transcrição literal
    de um trecho do TRECHO fornecido, delimitada entre aspas retas (" ").
-   Não parafraseie o texto legal citado. NUNCA coloque entre aspas retas uma fórmula,
-   valor ou dado que você mesmo inventou para compor o enunciado (ex.: uma lei de
-   formação ou um número que você escolheu) - aspas retas são só para texto que
-   existe literalmente no TRECHO; dado inventado pra esta questão específica vai
-   sem aspas.
+   Não parafraseie o texto legal citado. NUNCA coloque entre aspas retas nada que você
+   mesmo produziu: nem um dado/fórmula inventado para compor o enunciado, nem o
+   RESULTADO FINAL que você calculou (ex.: não escreva algo como 'o valor correto é
+   "105/128"' - o resultado do seu próprio cálculo nunca vai entre aspas retas, mesmo
+   estando certo). Aspas retas são exclusivamente para texto que existe literalmente
+   no TRECHO fornecido.
 3. Se a questão envolver cálculo (matemático, financeiro, lógico etc.), resolva-a por completo
    no campo "resolucao" ANTES de escrever as alternativas - mostre a conta passo a passo e
    chegue num valor final exato. Só depois de ter esse valor final, monte as 5 alternativas:

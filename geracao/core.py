@@ -101,7 +101,10 @@ REGRAS OBRIGATÓRIAS:
    frase, $$...$$ quando a fórmula ocupa a linha inteira sozinha. Nunca escreva
    fórmula como texto puro (ex.: "S_n = n/2(a_1+a_n)") quando ela pode ser LaTeX
    (ex.: "$S_n = \\frac{n}{2}(a_1 + a_n)$"). Matrizes sempre com colchetes, usando
-   \\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix} (nunca parênteses nem texto).
+   \\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix} (nunca parênteses nem texto). NÃO use LaTeX
+   pra número inteiro solto, letra isolada ou unidade de medida simples (ex.: 10, 50 kg, 20
+   m/s) - só pra fórmula/equação/fração/matriz/expressão que realmente precise de formatação
+   especial. Texto plano nesses casos simples.
 6. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON. O campo
    "resolucao" vem ANTES de "gabarito" no JSON - preencha nessa ordem.
 
@@ -156,7 +159,10 @@ REGRAS OBRIGATÓRIAS:
    fórmula ocupa a linha inteira sozinha. Nunca escreva fórmula como texto puro
    (ex.: "S_n = n/2(a_1+a_n)") quando ela pode ser LaTeX (ex.: "$S_n =
    \\frac{n}{2}(a_1 + a_n)$"). Matrizes sempre com colchetes, usando
-   \\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix} (nunca parênteses nem texto).
+   \\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix} (nunca parênteses nem texto). NÃO use LaTeX
+   pra número inteiro solto, letra isolada ou unidade de medida simples (ex.: 10, 50 kg, 20
+   m/s) - só pra fórmula/equação/fração/matriz/expressão que realmente precise de formatação
+   especial. Texto plano nesses casos simples.
 7. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON. O campo
    "resolucao" vem ANTES de "alternativas" e "gabarito" no JSON - preencha nessa ordem.
 
@@ -214,7 +220,9 @@ REGRAS OBRIGATÓRIAS:
 4. Fórmulas, equações, frações, matrizes, expressões químicas e qualquer notação
    matemática devem estar em LaTeX: delimitador $...$ para notação dentro de uma
    frase, $$...$$ quando a fórmula ocupa a linha inteira sozinha. Matrizes sempre
-   com colchetes, usando \\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}.
+   com colchetes, usando \\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}. NÃO use LaTeX pra
+   número inteiro solto, letra isolada ou unidade de medida simples (ex.: 10, 50 kg, 20 m/s) -
+   só pra fórmula/equação/fração/matriz/expressão que realmente precise de formatação especial.
 5. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON.
 
 FORMATO DE SAÍDA (JSON):

@@ -87,21 +87,28 @@ REGRAS OBRIGATÓRIAS:
 2. Qualquer citação legal no campo "comentario" deve ser uma transcrição literal
    de um trecho do TRECHO fornecido, delimitada entre aspas retas (" ").
    Não parafraseie o texto legal citado.
-3. Se um EXEMPLO DE REFERÊNCIA for fornecido, use-o só para calibrar tom,
+3. Se a afirmação do enunciado envolver cálculo (matemático, financeiro, lógico etc.), resolva
+   por completo no campo "resolucao" ANTES de decidir o gabarito - mostre a conta passo a
+   passo, chegue num valor final exato, e só então compare com o que o enunciado afirma para
+   decidir CERTO ou ERRADO. NUNCA decida o gabarito antes de fazer a conta. Se a afirmação não
+   envolver cálculo, "resolucao" pode ficar vazio ("").
+4. Se um EXEMPLO DE REFERÊNCIA for fornecido, use-o só para calibrar tom,
    profundidade e estrutura do comentário (é uma questão real de banca, revisada
    por humano). Nunca copie seu conteúdo nem cite a lei mencionada nele - a
    única fonte válida de citação continua sendo o TRECHO.
-4. Fórmulas, equações, frações, matrizes, expressões químicas e qualquer notação
+5. Fórmulas, equações, frações, matrizes, expressões químicas e qualquer notação
    matemática devem estar em LaTeX: delimitador $...$ para notação dentro de uma
    frase, $$...$$ quando a fórmula ocupa a linha inteira sozinha. Nunca escreva
    fórmula como texto puro (ex.: "S_n = n/2(a_1+a_n)") quando ela pode ser LaTeX
    (ex.: "$S_n = \\frac{n}{2}(a_1 + a_n)$"). Matrizes sempre com colchetes, usando
    \\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix} (nunca parênteses nem texto).
-5. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON.
+6. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON. O campo
+   "resolucao" vem ANTES de "gabarito" no JSON - preencha nessa ordem.
 
 FORMATO DE SAÍDA (JSON):
 {
   "enunciado": "...",
+  "resolucao": "conta passo a passo ate o valor final, ou vazio se nao envolver calculo",
   "gabarito": "CERTO" ou "ERRADO",
   "comentario": "..."
 }"""
@@ -128,27 +135,37 @@ REGRAS OBRIGATÓRIAS:
 2. Qualquer citação legal no campo "comentario" deve ser uma transcrição literal
    de um trecho do TRECHO fornecido, delimitada entre aspas retas (" ").
    Não parafraseie o texto legal citado.
-3. Gere exatamente 5 alternativas (A a E), sendo só UMA correta. As alternativas erradas
+3. Se a questão envolver cálculo (matemático, financeiro, lógico etc.), resolva-a por completo
+   no campo "resolucao" ANTES de escrever as alternativas - mostre a conta passo a passo e
+   chegue num valor final exato. Só depois de ter esse valor final, monte as 5 alternativas:
+   uma delas tem que ser EXATAMENTE esse valor (essa é a correta), as outras 4 são erros
+   plausíveis (trocar sinal, esquecer um termo, inverter uma etapa) mas seguindo da mesma
+   conta. NUNCA invente as alternativas primeiro e tente encaixar uma resposta depois - se
+   fizer isso, o valor certo frequentemente não sobra em nenhuma alternativa e a questão vira
+   inválida. Se a questão não envolver cálculo, "resolucao" pode ficar vazio ("").
+4. Gere exatamente 5 alternativas (A a E), sendo só UMA correta. As alternativas erradas
    devem ser plausíveis (erros sutis, não absurdos óbvios), mas baseadas no TRECHO - não
    invente informação externa nem para as alternativas erradas.
-4. Se um EXEMPLO DE REFERÊNCIA for fornecido, use-o só para calibrar tom,
+5. Se um EXEMPLO DE REFERÊNCIA for fornecido, use-o só para calibrar tom,
    profundidade e estrutura do comentário (é uma questão real de banca, revisada
    por humano). Nunca copie seu conteúdo nem cite a lei mencionada nele - a
    única fonte válida de citação continua sendo o TRECHO.
-5. Fórmulas, equações, frações, matrizes, expressões químicas e qualquer notação
+6. Fórmulas, equações, frações, matrizes, expressões químicas e qualquer notação
    matemática (no enunciado, nas alternativas ou no comentário) devem estar em
    LaTeX: delimitador $...$ para notação dentro de uma frase, $$...$$ quando a
    fórmula ocupa a linha inteira sozinha. Nunca escreva fórmula como texto puro
    (ex.: "S_n = n/2(a_1+a_n)") quando ela pode ser LaTeX (ex.: "$S_n =
    \\frac{n}{2}(a_1 + a_n)$"). Matrizes sempre com colchetes, usando
    \\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix} (nunca parênteses nem texto).
-6. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON.
+7. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON. O campo
+   "resolucao" vem ANTES de "alternativas" e "gabarito" no JSON - preencha nessa ordem.
 
 FORMATO DE SAÍDA (JSON):
 {
   "enunciado": "...",
+  "resolucao": "conta passo a passo ate o valor final, ou vazio se nao envolver calculo",
   "alternativas": {"A": "...", "B": "...", "C": "...", "D": "...", "E": "..."},
-  "gabarito": "A" ou "B" ou "C" ou "D" ou "E" (a letra da alternativa correta),
+  "gabarito": "A" ou "B" ou "C" ou "D" ou "E" (a letra da alternativa correta, que precisa ser exatamente o valor calculado em resolucao quando houver calculo),
   "comentario": "..."
 }"""
 

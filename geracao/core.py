@@ -291,7 +291,7 @@ def _normalizar_para_comparacao_citacao(s: str) -> str:
     return s.upper()
 
 
-PADRAO_RETICENCIAS = re.compile(r'\[\s*(?:\.\.\.|…)\s*\]|\.\.\.|…')
+PADRAO_RETICENCIAS = re.compile(r'\[\s*(?:\.\.\.|…)\s*\]|\.\.\.|…|•')
 
 
 def validar_citacao(texto: str, trecho: str, exigir_citacao: bool) -> bool:
@@ -300,9 +300,11 @@ def validar_citacao(texto: str, trecho: str, exigir_citacao: bool) -> bool:
         return not exigir_citacao
     trecho_norm = _normalizar_para_comparacao_citacao(trecho)
     for citacao in citacoes:
-        # o modelo costuma emendar dois trechos literais com "[...]" numa unica citacao; o
-        # marcador em si nao existe no material, entao valida cada pedaco separadamente
-        # (cada pedaco continua tendo que ser literal - nada inventado passa por aqui)
+        # o modelo costuma emendar trechos literais NAO ADJACENTES numa unica citacao, usando
+        # "[...]" ou marcadores de topico ("•") como se fossem cola entre eles - cada pedaco em
+        # si e literal, mas a string inteira junta nunca existe assim no material (caso real:
+        # 3 bullets nao-adjacentes de "Bombas Centrifugas" colados como se fossem 1 frase).
+        # Valida cada pedaco separadamente; cada um continua tendo que ser literal.
         for pedaco in PADRAO_RETICENCIAS.split(citacao):
             pedaco_norm = _normalizar_para_comparacao_citacao(pedaco)
             if pedaco_norm and pedaco_norm not in trecho_norm:
@@ -538,17 +540,26 @@ def gerar_questao(
     if formato_resolvido == 'abcde':
         embaralhar_alternativas(questao)
 
+    # pergunta com calculo (tem "resolucao" preenchida) nao precisa de citacao - a exigencia de
+    # citacao existe pra barrar lei/artigo inventado, nao faz sentido pra formula de matematica
+    # generica (achado real: questao de determinante 2x2 com conta certa foi rejeitada so por
+    # nao ter citado nada). Se o modelo citar mesmo assim, a citacao ainda precisa ser literal.
+    tem_calculo = bool(questao.get('resolucao'))
     texto_para_validar = questao.get('comentario') or questao.get('resposta', '')
-    citacao_ok = validar_citacao(texto_para_validar, trecho, exigir_citacao)
+    citacao_ok = validar_citacao(texto_para_validar, trecho, exigir_citacao and not tem_calculo)
 
     gabarito_ok, motivo_gabarito = True, ''
-    if citacao_ok and produto == 'mestre_questoes':
-        # so verifica gabarito se a citacao ja passou (economiza a chamada quando ja vai ser
-        # rejeitada de qualquer jeito) e so pra mestre_questoes (tem gabarito objetivo pra
-        # conferir; revisao_farol e resposta livre, sem "certo/errado" pra recalcular)
+    if produto == 'mestre_questoes' and (citacao_ok or tem_calculo):
+        # verifica gabarito quando a citacao ja passou (fluxo normal) OU quando tem calculo
+        # (mesmo se a citacao falhar, queremos saber se a conta bate - e o motivo mais util
+        # pra mostrar no card de revisao). So pra mestre_questoes: revisao_farol e resposta
+        # livre, sem "certo/errado" pra recalcular.
         gabarito_ok, motivo_gabarito = verificar_gabarito(openai_client, model, trecho, questao)
 
-    if not citacao_ok:
+    if tem_calculo and not gabarito_ok:
+        status = 'rejeitada'
+        motivo_rejeicao = f'verificacao independente do gabarito nao bateu: {motivo_gabarito}'
+    elif not citacao_ok:
         status = 'rejeitada'
         motivo_rejeicao = 'citacao legal nao encontrada literalmente no material_fonte'
     elif not gabarito_ok:

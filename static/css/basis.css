@@ -1,0 +1,101 @@
+/* "Basis" (reduzido) - mesmos tokens/convenções visuais do Brabo Analytics
+   (frontend/static/css/tokens.css + componentes.css), adaptado pro Conteudista:
+   só os tokens e os componentes genéricos usados aqui (painel, botão, tabela,
+   pill, input) - sem a barra lateral/seletor de lançamento/accordion/funil,
+   que são específicos do dashboard de marketing e não fazem sentido num
+   chat ou numa tela de CRUD simples. */
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+
+:root {
+  color-scheme: light dark;
+  --bs-ink:        #1f2330;
+  --bs-ink-muted:  #6b7280;
+  --bs-ink-subtle: #9ca3af;
+  --bs-bg:         #f1f3f5;
+  --bs-surface:    #f6f7fb;
+  --bs-card:       #ffffff;
+  --bs-border:     #e5e7eb;
+  --bs-border-s:   #d1d5db;
+  --bs-accent:     #374151;
+  --bs-accent-bg:  #f3f4f6;
+  --bs-success:    #31c16c;
+  --bs-success-bg: #f0fdf4;
+  --bs-warning:    #f4b740;
+  --bs-warning-bg: #fffbeb;
+  --bs-danger:     #f05454;
+  --bs-danger-bg:  #fef2f2;
+  --bs-sh-sm: 0 1px 3px rgba(20,26,52,.08);
+  --bs-sh-md: 0 4px 12px rgba(20,26,52,.10);
+  --bs-r-sm: 6px; --bs-r-md: 8px; --bs-r-lg: 12px; --bs-r-xl: 16px;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bs-ink: #e7e9ec; --bs-ink-muted: #9aa0a8; --bs-ink-subtle: #787e86;
+    --bs-bg: #15171b; --bs-surface: #1b1e23; --bs-card: #1e2128;
+    --bs-border: #2c3038; --bs-border-s: #3a3f48;
+    --bs-accent: #6b7280; --bs-accent-bg: #262a31;
+    --bs-success-bg: #10281c; --bs-danger-bg: #2e1414; --bs-warning-bg: #2e2510;
+    --bs-sh-sm: 0 1px 3px rgba(0,0,0,.4); --bs-sh-md: 0 4px 14px rgba(0,0,0,.45);
+  }
+}
+
+* { box-sizing: border-box; }
+html, body {
+  margin: 0; padding: 0;
+  font-family: 'Inter', 'Segoe UI', system-ui, sans-serif;
+  color: var(--bs-ink);
+  background: var(--bs-bg);
+}
+a { color: var(--bs-accent); }
+a:focus-visible, button:focus-visible, [tabindex]:focus-visible {
+  outline: 2px solid var(--bs-accent); outline-offset: 2px; border-radius: 4px;
+}
+
+.bs-panel {
+  background: var(--bs-card);
+  border: 1px solid var(--bs-border);
+  border-radius: var(--bs-r-lg);
+  box-shadow: var(--bs-sh-sm);
+  padding: 18px 20px;
+}
+
+.bs-btn {
+  border: none; border-radius: var(--bs-r-md); padding: 9px 16px;
+  font-size: 14px; font-weight: 600; font-family: inherit; cursor: pointer;
+  background: var(--bs-accent); color: #fff; transition: filter .1s;
+}
+.bs-btn:hover { filter: brightness(1.15); }
+.bs-btn:disabled { opacity: .45; cursor: not-allowed; }
+.bs-btn.success { background: var(--bs-success); }
+.bs-btn.danger  { background: var(--bs-danger); }
+.bs-btn.ghost   { background: var(--bs-accent-bg); color: var(--bs-ink); border: 1px solid var(--bs-border-s); }
+
+.bs-input {
+  width: 100%; padding: 8px 10px; border: 1px solid var(--bs-border);
+  border-radius: var(--bs-r-md); background: var(--bs-surface); color: var(--bs-ink);
+  font-size: 14px; font-family: inherit; outline: none; transition: border-color .15s;
+}
+.bs-input:focus { border-color: var(--bs-accent); }
+
+.bs-pill {
+  display: inline-block; padding: 2px 10px; border-radius: 999px;
+  font-size: 11px; font-weight: 700; color: #fff; white-space: nowrap;
+}
+.bs-pill.success { background: var(--bs-success); }
+.bs-pill.warning { background: var(--bs-warning); color: #1a1a2e; }
+.bs-pill.danger  { background: var(--bs-danger); }
+.bs-pill.neutral { background: var(--bs-border-s); color: var(--bs-ink); }
+
+.bs-table-wrap {
+  background: var(--bs-card); border: 1px solid var(--bs-border);
+  border-radius: var(--bs-r-lg); overflow: auto;
+}
+.bs-table-wrap table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--bs-card); }
+.bs-table-wrap th {
+  background: var(--bs-accent); color: #fff; padding: 10px 12px; text-align: left;
+  font-size: 11px; font-weight: 700; text-transform: uppercase;
+}
+.bs-table-wrap td { padding: 8px 12px; border-bottom: 1px solid var(--bs-border); vertical-align: top; }
+.bs-table-wrap tr:last-child td { border-bottom: none; }
+.bs-table-wrap tbody tr:nth-child(odd) td { background: var(--bs-surface); }
+.bs-table-wrap tr:hover td { background: var(--bs-accent-bg) !important; }

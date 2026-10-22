@@ -7,6 +7,7 @@ import uuid
 from dotenv import load_dotenv
 from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
@@ -32,6 +33,7 @@ from parse_simulado_antigo import parse_simulado  # noqa: E402
 app = FastAPI(title='Aprova Sim - IA Conteudista')
 
 STATIC_DIR = os.path.join(os.path.dirname(__file__), '..', 'static')
+app.mount('/static', StaticFiles(directory=STATIC_DIR), name='static')
 
 SYSTEM_PROMPT_CHAT = """Você é o assistente de conteúdo da Aprova Sim, conversando com o time de Produto.
 

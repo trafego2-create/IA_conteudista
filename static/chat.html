@@ -4,39 +4,12 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Aprova Sim - Agente Conteudista</title>
+<link rel="stylesheet" href="/static/css/basis.css">
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css">
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js"></script>
 <script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js"></script>
 <style>
-  :root {
-    color-scheme: light dark;
-    --bg: #f4f5f7;
-    --painel: #ffffff;
-    --texto: #1c1e21;
-    --texto-suave: #6b7280;
-    --borda: #e2e4e8;
-    --usuario-bg: #2563eb;
-    --usuario-texto: #ffffff;
-    --assistente-bg: #eef0f3;
-    --assistente-texto: #1c1e21;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #15171b;
-      --painel: #1e2128;
-      --texto: #e7e9ec;
-      --texto-suave: #9aa0a8;
-      --borda: #2c3038;
-      --assistente-bg: #2a2d34;
-      --assistente-texto: #e7e9ec;
-    }
-  }
-  * { box-sizing: border-box; }
   body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg);
-    color: var(--texto);
     height: 100vh;
     display: flex;
     justify-content: center;
@@ -50,20 +23,17 @@
   }
   header {
     padding: 16px 20px;
-    border-bottom: 1px solid var(--borda);
-    background: var(--painel);
+    border-bottom: 1px solid var(--bs-border);
+    background: var(--bs-card);
   }
   header h1 {
     font-size: 16px;
     margin: 0;
   }
-  header p a {
-    color: var(--usuario-bg);
-  }
   header p {
     margin: 2px 0 0;
     font-size: 12px;
-    color: var(--texto-suave);
+    color: var(--bs-ink-muted);
   }
   #mensagens {
     flex: 1;
@@ -76,7 +46,7 @@
   .msg {
     max-width: 80%;
     padding: 10px 14px;
-    border-radius: 14px;
+    border-radius: var(--bs-r-lg);
     line-height: 1.45;
     font-size: 14px;
     white-space: pre-wrap;
@@ -84,60 +54,51 @@
   }
   .msg.usuario {
     align-self: flex-end;
-    background: var(--usuario-bg);
-    color: var(--usuario-texto);
+    background: var(--bs-accent);
+    color: #fff;
     border-bottom-right-radius: 4px;
   }
   .msg.assistente {
     align-self: flex-start;
-    background: var(--assistente-bg);
-    color: var(--assistente-texto);
+    background: var(--bs-surface);
+    color: var(--bs-ink);
     border-bottom-left-radius: 4px;
   }
   .msg.carregando {
     align-self: flex-start;
-    background: var(--assistente-bg);
-    color: var(--texto-suave);
+    background: var(--bs-surface);
+    color: var(--bs-ink-muted);
     font-style: italic;
   }
   form {
     display: flex;
     gap: 8px;
     padding: 16px 20px;
-    border-top: 1px solid var(--borda);
-    background: var(--painel);
+    border-top: 1px solid var(--bs-border);
+    background: var(--bs-card);
   }
   textarea {
     flex: 1;
     resize: none;
-    border: 1px solid var(--borda);
-    border-radius: 10px;
+    border: 1px solid var(--bs-border);
+    border-radius: var(--bs-r-md);
     padding: 10px 12px;
     font-size: 14px;
     font-family: inherit;
-    background: var(--bg);
-    color: var(--texto);
+    background: var(--bs-surface);
+    color: var(--bs-ink);
     max-height: 120px;
   }
-  button {
-    border: none;
-    background: var(--usuario-bg);
-    color: #fff;
+  #botao-enviar {
     padding: 0 18px;
-    border-radius: 10px;
-    font-size: 14px;
-    cursor: pointer;
-  }
-  button:disabled {
-    opacity: 0.5;
-    cursor: not-allowed;
   }
   .questao-card {
     align-self: flex-start;
     max-width: 88%;
-    background: var(--painel);
-    border: 1px solid var(--borda);
-    border-radius: 12px;
+    background: var(--bs-card);
+    border: 1px solid var(--bs-border);
+    border-radius: var(--bs-r-lg);
+    box-shadow: var(--bs-sh-sm);
     padding: 14px 16px;
     font-size: 13.5px;
     line-height: 1.5;
@@ -146,7 +107,7 @@
     font-size: 11px;
     text-transform: uppercase;
     letter-spacing: 0.03em;
-    color: var(--texto-suave);
+    color: var(--bs-ink-muted);
     margin-top: 8px;
   }
   .questao-card .rotulo:first-child {
@@ -164,22 +125,25 @@
   .btn-aprovar, .btn-rejeitar {
     flex: 1;
     padding: 8px 0;
-    border-radius: 8px;
+    border-radius: var(--bs-r-md);
     font-size: 13px;
+    border: none;
+    color: #fff;
+    cursor: pointer;
   }
   .btn-aprovar {
-    background: #16a34a;
+    background: var(--bs-success);
   }
   .btn-rejeitar {
-    background: #dc2626;
+    background: var(--bs-danger);
   }
   .questao-decisao {
     margin-top: 12px;
     font-size: 13px;
     font-weight: 600;
   }
-  .questao-decisao.aprovada { color: #16a34a; }
-  .questao-decisao.rejeitada { color: #dc2626; }
+  .questao-decisao.aprovada { color: var(--bs-success); }
+  .questao-decisao.rejeitada { color: var(--bs-danger); }
 </style>
 </head>
 <body>
@@ -191,7 +155,7 @@
   <div id="mensagens"></div>
   <form id="form-envio">
     <textarea id="campo-mensagem" rows="1" placeholder="Ex.: gere 20 questões de Direito Constitucional do INSS" autofocus></textarea>
-    <button type="submit" id="botao-enviar">Enviar</button>
+    <button type="submit" id="botao-enviar" class="bs-btn">Enviar</button>
   </form>
 </div>
 

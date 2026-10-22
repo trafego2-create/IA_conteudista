@@ -4,89 +4,69 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Aprova Sim - Administração de Conteúdo</title>
+<link rel="stylesheet" href="/static/css/basis.css">
 <style>
-  :root {
-    color-scheme: light dark;
-    --bg: #f4f5f7;
-    --painel: #ffffff;
-    --texto: #1c1e21;
-    --texto-suave: #6b7280;
-    --borda: #e2e4e8;
-    --azul: #2563eb;
-    --verde: #16a34a;
-    --vermelho: #dc2626;
-  }
-  @media (prefers-color-scheme: dark) {
-    :root {
-      --bg: #15171b;
-      --painel: #1e2128;
-      --texto: #e7e9ec;
-      --texto-suave: #9aa0a8;
-      --borda: #2c3038;
-    }
-  }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg);
-    color: var(--texto);
-    padding: 20px;
-  }
+  body { padding: 20px; }
   .app { max-width: 1000px; margin: 0 auto; }
   header { margin-bottom: 20px; }
   header h1 { font-size: 20px; margin: 0; }
-  header p { margin: 4px 0 0; font-size: 13px; color: var(--texto-suave); }
-  header a { color: var(--azul); font-size: 13px; }
+  header p { margin: 4px 0 0; font-size: 13px; color: var(--bs-ink-muted); }
   .painel {
-    background: var(--painel);
-    border: 1px solid var(--borda);
-    border-radius: 12px;
+    background: var(--bs-card);
+    border: 1px solid var(--bs-border);
+    border-radius: var(--bs-r-lg);
+    box-shadow: var(--bs-sh-sm);
     padding: 18px 20px;
     margin-bottom: 20px;
   }
   .painel h2 { font-size: 15px; margin: 0 0 14px; }
-  label { display: block; font-size: 12px; color: var(--texto-suave); margin-bottom: 4px; margin-top: 12px; }
+  label { display: block; font-size: 12px; color: var(--bs-ink-muted); margin-bottom: 4px; margin-top: 12px; }
   label:first-child { margin-top: 0; }
   select, input[type=text], input[type=file] {
     width: 100%;
     padding: 8px 10px;
-    border: 1px solid var(--borda);
-    border-radius: 8px;
-    background: var(--bg);
-    color: var(--texto);
+    border: 1px solid var(--bs-border);
+    border-radius: var(--bs-r-md);
+    background: var(--bs-surface);
+    color: var(--bs-ink);
     font-size: 14px;
+    font-family: inherit;
   }
   .linha-radio { display: flex; gap: 16px; font-size: 14px; }
   .linha-radio label { margin: 0; display: flex; align-items: center; gap: 6px; }
   button {
     border: none;
-    background: var(--azul);
+    background: var(--bs-accent);
     color: #fff;
     padding: 9px 16px;
-    border-radius: 8px;
+    border-radius: var(--bs-r-md);
     font-size: 14px;
+    font-family: inherit;
     cursor: pointer;
     margin-top: 14px;
+    transition: filter .1s;
   }
-  button.verde { background: var(--verde); }
-  button.vermelho { background: var(--vermelho); }
-  button.secundario { background: var(--texto-suave); }
-  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  button:hover { filter: brightness(1.15); }
+  button.verde { background: var(--bs-success); }
+  button.vermelho { background: var(--bs-danger); }
+  button.secundario { background: var(--bs-accent-bg); color: var(--bs-ink); border: 1px solid var(--bs-border-s); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; filter: none; }
   .abas { display: flex; gap: 8px; margin-bottom: 14px; }
-  .abas button { margin-top: 0; background: var(--painel); color: var(--texto); border: 1px solid var(--borda); }
-  .abas button.ativa { background: var(--azul); color: #fff; border-color: var(--azul); }
+  .abas button { margin-top: 0; background: var(--bs-card); color: var(--bs-ink); border: 1px solid var(--bs-border); }
+  .abas button.ativa { background: var(--bs-accent); color: #fff; border-color: var(--bs-accent); }
   .filtros { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
   .filtros > div { flex: 1; min-width: 140px; }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--borda); vertical-align: top; }
-  th { color: var(--texto-suave); font-weight: 600; font-size: 11px; text-transform: uppercase; }
-  .tabela-scroll { max-height: 420px; overflow-y: auto; border: 1px solid var(--borda); border-radius: 8px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; background: var(--bs-card); }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--bs-border); vertical-align: top; }
+  th { background: var(--bs-accent); color: #fff; font-weight: 700; font-size: 11px; text-transform: uppercase; }
+  tbody tr:nth-child(odd) td { background: var(--bs-surface); }
+  tbody tr:hover td { background: var(--bs-accent-bg) !important; }
+  .tabela-scroll { max-height: 420px; overflow-y: auto; border: 1px solid var(--bs-border); border-radius: var(--bs-r-md); }
   .acoes-lista { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
   .mensagem { font-size: 13px; margin-top: 10px; }
-  .mensagem.erro { color: var(--vermelho); }
-  .mensagem.sucesso { color: var(--verde); }
-  .falhas { font-size: 12px; color: var(--vermelho); margin-top: 8px; }
+  .mensagem.erro { color: var(--bs-danger); }
+  .mensagem.sucesso { color: var(--bs-success); }
+  .falhas { font-size: 12px; color: var(--bs-danger); margin-top: 8px; }
   .oculto { display: none !important; }
 </style>
 </head>

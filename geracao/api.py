@@ -1,8 +1,11 @@
 import json
 import os
+import sys
+import tempfile
+import uuid
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
@@ -10,9 +13,21 @@ load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
 from core import (  # noqa: E402
     PRODUTOS, DecisaoInvalida, EstoqueInsuficiente, MaterialNaoEncontrado, ProdutoInvalido,
-    QuestaoNaoEncontrada, gerar_lote, gerar_questao, get_openai, listar_concursos, listar_materias,
-    listar_materias_geracao, revisar_questao, sortear_simulado, sortear_simulado_estratificado,
+    QuestaoNaoEncontrada, buscar_material_fonte, excluir_material_fonte, excluir_questoes_curadas,
+    gerar_lote, gerar_questao, get_openai, inserir_material_fonte, inserir_questoes_curadas,
+    listar_concursos, listar_materias, listar_materias_geracao, listar_material_fonte,
+    listar_questoes_curadas, revisar_questao, sortear_simulado, sortear_simulado_estratificado,
 )
+
+PARSER_DIR = os.path.join(os.path.dirname(__file__), '..', 'parser')
+if PARSER_DIR not in sys.path:
+    sys.path.insert(0, PARSER_DIR)
+
+from parse_apostila import (  # noqa: E402
+    parse_apostila, parse_apostila_docx_por_heading, parse_apostila_single,
+)
+from parse_mq_digital import parse_mq_digital  # noqa: E402
+from parse_simulado_antigo import parse_simulado  # noqa: E402
 
 app = FastAPI(title='Aprova Sim - IA Conteudista')
 
@@ -288,6 +303,11 @@ def chat_ui():
     return FileResponse(os.path.join(STATIC_DIR, 'chat.html'))
 
 
+@app.get('/material')
+def material_ui():
+    return FileResponse(os.path.join(STATIC_DIR, 'material.html'))
+
+
 @app.post('/gerar')
 def gerar(req: GerarRequest):
     try:
@@ -342,3 +362,137 @@ def chat(req: ChatRequest):
             })
 
     raise HTTPException(status_code=500, detail='limite de chamadas de ferramenta excedido numa unica resposta')
+
+
+# =====================================================================
+# Administracao de conteudo (pagina /material) - lista/inclui/exclui
+# material_fonte e questoes curadas (banco_real/simulado_migrado).
+# =====================================================================
+
+TIPOS_MATERIAL_FONTE = {'apostila_combinada', 'apostila_unica', 'apostila_docx_heading'}
+TIPOS_QUESTOES = {'mq_digital', 'simulado_antigo'}
+
+# previews pendentes de confirmacao, em memoria (processo unico, sem persistencia -
+# um restart do servidor derruba previews nao confirmados, o que e aceitavel: so re-envia)
+PREVIEWS: dict = {}
+
+
+class ExcluirIdsRequest(BaseModel):
+    ids: list[int]
+
+
+class ConfirmarPreviewRequest(BaseModel):
+    preview_id: str
+
+
+def _rodar_parser(tipo: str, caminho: str, concurso: str, materia: str, arquivo_origem: str, origem: str):
+    if tipo == 'apostila_combinada':
+        return 'material_fonte', parse_apostila(caminho, concurso, arquivo_origem), []
+    if tipo == 'apostila_unica':
+        if not materia:
+            raise HTTPException(status_code=400, detail='materia e obrigatoria pra esse tipo')
+        return 'material_fonte', parse_apostila_single(caminho, concurso, materia, arquivo_origem), []
+    if tipo == 'apostila_docx_heading':
+        if not materia:
+            raise HTTPException(status_code=400, detail='materia e obrigatoria pra esse tipo')
+        return 'material_fonte', parse_apostila_docx_por_heading(caminho, concurso, materia, arquivo_origem), []
+    if tipo == 'mq_digital':
+        registros, falhas = parse_mq_digital(caminho, concurso, materia or None)
+        return 'questoes', registros, falhas
+    if tipo == 'simulado_antigo':
+        registros, falhas = parse_simulado(caminho, concurso, arquivo_origem, origem=origem or 'simulado_migrado')
+        return 'questoes', registros, falhas
+    raise HTTPException(status_code=400, detail=f'tipo desconhecido: {tipo!r}')
+
+
+def _resumo_material_fonte(registros: list) -> list:
+    return [
+        {
+            'materia': r['materia'], 'tema': r['tema'], 'ordem': r['ordem'],
+            'pagina': r['pagina'], 'tamanho_trecho': len(r['trecho']),
+        }
+        for r in registros
+    ]
+
+
+def _resumo_questoes(registros: list) -> list:
+    return [
+        {
+            'materia': r['materia'], 'tema': r.get('tema'), 'formato': r.get('formato'),
+            'gabarito': r.get('gabarito'), 'enunciado': (r.get('enunciado') or '')[:200],
+        }
+        for r in registros
+    ]
+
+
+@app.get('/api/material/fonte')
+def api_listar_material_fonte(concurso: str = None, materia: str = None):
+    return {'linhas': listar_material_fonte(concurso, materia)}
+
+
+@app.get('/api/material/fonte/{material_id}')
+def api_buscar_material_fonte(material_id: int):
+    try:
+        return buscar_material_fonte(material_id)
+    except QuestaoNaoEncontrada as e:
+        raise HTTPException(status_code=404, detail=str(e))
+
+
+@app.post('/api/material/fonte/excluir')
+def api_excluir_material_fonte(req: ExcluirIdsRequest):
+    apagadas = excluir_material_fonte(req.ids)
+    return {'apagadas': apagadas}
+
+
+@app.get('/api/material/questoes')
+def api_listar_questoes_curadas(concurso: str = None, materia: str = None, origem: str = None, status: str = None):
+    return {'linhas': listar_questoes_curadas(concurso, materia, origem, status)}
+
+
+@app.post('/api/material/questoes/excluir')
+def api_excluir_questoes_curadas(req: ExcluirIdsRequest):
+    apagadas = excluir_questoes_curadas(req.ids)
+    return {'apagadas': apagadas}
+
+
+@app.post('/api/material/preview')
+def api_material_preview(
+    file: UploadFile, tipo: str = Form(...), concurso: str = Form(...),
+    materia: str = Form(None), origem: str = Form(None),
+):
+    if tipo not in TIPOS_MATERIAL_FONTE | TIPOS_QUESTOES:
+        raise HTTPException(status_code=400, detail=f'tipo desconhecido: {tipo!r}')
+    sufixo = os.path.splitext(file.filename or '')[1].lower()
+    if sufixo not in ('.pdf', '.docx'):
+        raise HTTPException(status_code=400, detail='envie um arquivo .pdf ou .docx')
+
+    with tempfile.NamedTemporaryFile(delete=False, suffix=sufixo) as tmp:
+        tmp.write(file.file.read())
+        caminho_temporario = tmp.name
+    try:
+        tabela, registros, falhas = _rodar_parser(tipo, caminho_temporario, concurso, materia, file.filename, origem)
+    except (ValueError, MaterialNaoEncontrado) as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    finally:
+        os.remove(caminho_temporario)
+
+    if not registros:
+        raise HTTPException(status_code=400, detail='nenhum registro extraido desse arquivo')
+
+    preview_id = str(uuid.uuid4())
+    PREVIEWS[preview_id] = {'tabela': tabela, 'registros': registros}
+    resumo = _resumo_material_fonte(registros) if tabela == 'material_fonte' else _resumo_questoes(registros)
+    return {
+        'preview_id': preview_id, 'tabela': tabela, 'total': len(registros),
+        'resumo': resumo[:200], 'falhas': falhas,
+    }
+
+
+@app.post('/api/material/confirmar')
+def api_material_confirmar(req: ConfirmarPreviewRequest):
+    preview = PREVIEWS.pop(req.preview_id, None)
+    if preview is None:
+        raise HTTPException(status_code=404, detail='preview nao encontrado (pode ter expirado - refaca o upload)')
+    if preview['tabela'] == 'material_fonte':
+        return inserir_material_fonte(preview['registros'])
+    return inserir_questoes_curadas(preview['registros'])

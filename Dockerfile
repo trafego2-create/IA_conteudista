@@ -7,6 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY geracao/ ./geracao/
 COPY static/ ./static/
+COPY parser/ ./parser/
 
 ENV PYTHONPATH=/app/geracao
 

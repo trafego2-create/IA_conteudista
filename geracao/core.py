@@ -862,3 +862,148 @@ def sortear_simulado_estratificado(concurso: str, distribuicao: dict, formato: s
         'quantidade': len(selecionadas),
         'questoes': selecionadas,
     }
+
+
+# =====================================================================
+# Administracao de conteudo (pagina /material) - lista/inclui/exclui
+# material_fonte (apostilas, usado pra gerar por IA) e questoes curadas
+# (banco_real/simulado_migrado, importadas prontas - nunca gerado por IA).
+# So reaproveita os parsers/regras de status que ja existiam via script,
+# nao inventa fluxo novo.
+# =====================================================================
+
+LOTE_UPSERT = 500
+
+
+def listar_material_fonte(concurso: str = None, materia: str = None) -> list:
+    supabase = get_supabase()
+    consulta = supabase.table('material_fonte').select('*')
+    if concurso:
+        consulta = consulta.ilike('concurso', concurso)
+    if materia:
+        consulta = consulta.ilike('materia', materia)
+    linhas, off = [], 0
+    while True:
+        r = consulta.range(off, off + 999).execute()
+        linhas += r.data
+        if len(r.data) < 1000:
+            break
+        off += 1000
+    resultado = []
+    for linha in linhas:
+        linha = dict(linha)
+        linha['tamanho_trecho'] = len(linha.pop('trecho', '') or '')
+        resultado.append(linha)
+    resultado.sort(key=lambda x: (x['concurso'], x['materia'], x.get('ordem') or 0))
+    return resultado
+
+
+def buscar_material_fonte(id: int) -> dict:
+    supabase = get_supabase()
+    resultado = supabase.table('material_fonte').select('*').eq('id', id).limit(1).execute()
+    if not resultado.data:
+        raise QuestaoNaoEncontrada(f'nenhum material_fonte com id={id!r}')
+    return resultado.data[0]
+
+
+def excluir_material_fonte(ids: list) -> list:
+    if not ids:
+        return []
+    supabase = get_supabase()
+    apagadas = supabase.table('material_fonte').select('*').in_('id', ids).execute().data
+    if apagadas:
+        supabase.table('material_fonte').delete().in_('id', ids).execute()
+    return apagadas
+
+
+def inserir_material_fonte(registros: list) -> dict:
+    if not registros:
+        return {'inseridos': 0, 'duplicados': 0}
+    supabase = get_supabase()
+    inseridos = 0
+    for i in range(0, len(registros), LOTE_UPSERT):
+        lote = registros[i:i + LOTE_UPSERT]
+        resultado = (
+            supabase.table('material_fonte')
+            .upsert(lote, on_conflict='concurso,arquivo_origem,hash_conteudo', ignore_duplicates=True)
+            .execute()
+        )
+        inseridos += len(resultado.data)
+    return {'inseridos': inseridos, 'duplicados': len(registros) - inseridos}
+
+
+ORIGENS_CURADAS = ('banco_real', 'simulado_migrado')
+
+
+def listar_questoes_curadas(concurso: str = None, materia: str = None, origem: str = None, status: str = None) -> list:
+    supabase = get_supabase()
+    consulta = (
+        supabase.table('questoes')
+        .select('id, concurso, materia, tema, origem, formato, status, banca_ano, enunciado, arquivo_origem, hash_conteudo')
+    )
+    consulta = consulta.in_('origem', [origem] if origem else list(ORIGENS_CURADAS))
+    if concurso:
+        consulta = consulta.ilike('concurso', concurso)
+    if materia:
+        consulta = consulta.ilike('materia', materia)
+    if status:
+        consulta = consulta.eq('status', status)
+    linhas, off = [], 0
+    while True:
+        r = consulta.range(off, off + 999).execute()
+        linhas += r.data
+        if len(r.data) < 1000:
+            break
+        off += 1000
+    for linha in linhas:
+        if linha.get('enunciado') and len(linha['enunciado']) > 200:
+            linha['enunciado'] = linha['enunciado'][:200] + '...'
+    linhas.sort(key=lambda x: (x['concurso'], x['materia']))
+    return linhas
+
+
+def excluir_questoes_curadas(ids: list) -> list:
+    """So apaga questao de origem banco_real/simulado_migrado - nunca deixa essa pagina
+    apagar mestre_questoes/revisao_farol por engano (aquelas tem fluxo de revisao proprio
+    no chat, nao devem ser tocadas por aqui)."""
+    if not ids:
+        return []
+    supabase = get_supabase()
+    apagadas = (
+        supabase.table('questoes').select('*').in_('id', ids).in_('origem', list(ORIGENS_CURADAS)).execute().data
+    )
+    ids_validos = [linha['id'] for linha in apagadas]
+    if ids_validos:
+        supabase.table('questoes').delete().in_('id', ids_validos).execute()
+    return apagadas
+
+
+def inserir_questoes_curadas(registros: list) -> dict:
+    """Upsert em questoes replicando a regra de status ja usada pelos scripts:
+    banco_real sempre pendente_revisao (geracao/importar_banco_real.py); demais origens
+    (simulado_migrado) aprovada direto, exceto quando depende de imagem/figura ausente no
+    texto extraido (heuristica de geracao/importar_simulados.py, reaproveitada aqui)."""
+    if not registros:
+        return {'inseridos': 0, 'duplicados': 0}
+    from importar_simulados import depende_de_imagem  # noqa: E402 (mesmo PYTHONPATH de geracao)
+
+    preparados = []
+    for registro in registros:
+        registro = dict(registro)
+        if registro.get('origem') == 'banco_real':
+            registro['status'] = 'pendente_revisao'
+        else:
+            registro['status'] = 'pendente_revisao' if depende_de_imagem(registro) else 'aprovada'
+        preparados.append(registro)
+
+    supabase = get_supabase()
+    inseridos = 0
+    for i in range(0, len(preparados), LOTE_UPSERT):
+        lote = preparados[i:i + LOTE_UPSERT]
+        resultado = (
+            supabase.table('questoes')
+            .upsert(lote, on_conflict='concurso,hash_conteudo', ignore_duplicates=True)
+            .execute()
+        )
+        inseridos += len(resultado.data)
+    return {'inseridos': inseridos, 'duplicados': len(preparados) - inseridos}

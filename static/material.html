@@ -1,0 +1,462 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Aprova Sim - Administração de Conteúdo</title>
+<style>
+  :root {
+    color-scheme: light dark;
+    --bg: #f4f5f7;
+    --painel: #ffffff;
+    --texto: #1c1e21;
+    --texto-suave: #6b7280;
+    --borda: #e2e4e8;
+    --azul: #2563eb;
+    --verde: #16a34a;
+    --vermelho: #dc2626;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #15171b;
+      --painel: #1e2128;
+      --texto: #e7e9ec;
+      --texto-suave: #9aa0a8;
+      --borda: #2c3038;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--texto);
+    padding: 20px;
+  }
+  .app { max-width: 1000px; margin: 0 auto; }
+  header { margin-bottom: 20px; }
+  header h1 { font-size: 20px; margin: 0; }
+  header p { margin: 4px 0 0; font-size: 13px; color: var(--texto-suave); }
+  header a { color: var(--azul); font-size: 13px; }
+  .painel {
+    background: var(--painel);
+    border: 1px solid var(--borda);
+    border-radius: 12px;
+    padding: 18px 20px;
+    margin-bottom: 20px;
+  }
+  .painel h2 { font-size: 15px; margin: 0 0 14px; }
+  label { display: block; font-size: 12px; color: var(--texto-suave); margin-bottom: 4px; margin-top: 12px; }
+  label:first-child { margin-top: 0; }
+  select, input[type=text], input[type=file] {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid var(--borda);
+    border-radius: 8px;
+    background: var(--bg);
+    color: var(--texto);
+    font-size: 14px;
+  }
+  .linha-radio { display: flex; gap: 16px; font-size: 14px; }
+  .linha-radio label { margin: 0; display: flex; align-items: center; gap: 6px; }
+  button {
+    border: none;
+    background: var(--azul);
+    color: #fff;
+    padding: 9px 16px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    margin-top: 14px;
+  }
+  button.verde { background: var(--verde); }
+  button.vermelho { background: var(--vermelho); }
+  button.secundario { background: var(--texto-suave); }
+  button:disabled { opacity: 0.45; cursor: not-allowed; }
+  .abas { display: flex; gap: 8px; margin-bottom: 14px; }
+  .abas button { margin-top: 0; background: var(--painel); color: var(--texto); border: 1px solid var(--borda); }
+  .abas button.ativa { background: var(--azul); color: #fff; border-color: var(--azul); }
+  .filtros { display: flex; gap: 12px; margin-bottom: 12px; flex-wrap: wrap; }
+  .filtros > div { flex: 1; min-width: 140px; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--borda); vertical-align: top; }
+  th { color: var(--texto-suave); font-weight: 600; font-size: 11px; text-transform: uppercase; }
+  .tabela-scroll { max-height: 420px; overflow-y: auto; border: 1px solid var(--borda); border-radius: 8px; }
+  .acoes-lista { display: flex; justify-content: space-between; align-items: center; margin-top: 12px; }
+  .mensagem { font-size: 13px; margin-top: 10px; }
+  .mensagem.erro { color: var(--vermelho); }
+  .mensagem.sucesso { color: var(--verde); }
+  .falhas { font-size: 12px; color: var(--vermelho); margin-top: 8px; }
+  .oculto { display: none !important; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <h1>Administração de Conteúdo</h1>
+    <p>Material-fonte (apostilas, usado pra gerar por IA) e questões prontas (banco_real/simulado) - sem login, cuidado ao excluir. <a href="/">Voltar pro chat</a></p>
+  </header>
+
+  <div class="painel">
+    <h2>Adicionar novo</h2>
+    <form id="formPreview">
+      <label>Tipo de arquivo</label>
+      <select id="tipo">
+        <option value="apostila_combinada">Apostila combinada (múltiplas matérias, divisores CONCURSOS)</option>
+        <option value="apostila_unica">Apostila de uma matéria (PDF ou DOCX com Sumário)</option>
+        <option value="apostila_docx_heading">Apostila DOCX (Sumário é TOC automático do Word)</option>
+        <option value="mq_digital">Banco de questões reais (MQ Digital)</option>
+        <option value="simulado_antigo">Simulado antigo (comentário logo após cada questão)</option>
+      </select>
+
+      <label>Concurso (sigla)</label>
+      <input type="text" id="concurso" list="listaConcursos" placeholder="ex.: BB, INSS, TJSP, CEF, PETR, MPSP-OP" required>
+      <datalist id="listaConcursos">
+        <option value="BB"><option value="INSS"><option value="TJSP">
+        <option value="CEF"><option value="PETR"><option value="MPSP-OP">
+      </datalist>
+
+      <label id="labelMateria">Matéria</label>
+      <input type="text" id="materia" placeholder="ex.: Direito Constitucional">
+
+      <div id="areaOrigem" class="oculto">
+        <label>Marcar questões como</label>
+        <div class="linha-radio">
+          <label><input type="radio" name="origem" value="simulado_migrado" checked> simulado_migrado (padrão)</label>
+          <label><input type="radio" name="origem" value="banco_real"> banco_real (é conteúdo real de banca, não simulado próprio)</label>
+        </div>
+      </div>
+
+      <label>Arquivo (.pdf ou .docx)</label>
+      <input type="file" id="arquivo" accept=".pdf,.docx" required>
+
+      <button type="submit">Pré-visualizar</button>
+    </form>
+    <div id="mensagemPreview"></div>
+
+    <div id="areaPreview" class="oculto">
+      <h2 style="margin-top:20px">Prévia</h2>
+      <p id="resumoPreview" style="font-size:13px"></p>
+      <div class="tabela-scroll"><table id="tabelaPreview"><thead></thead><tbody></tbody></table></div>
+      <div id="falhasPreview" class="falhas oculto"></div>
+      <button class="verde" id="btnConfirmar">Confirmar e salvar</button>
+      <button class="secundario" id="btnCancelarPreview">Cancelar</button>
+    </div>
+  </div>
+
+  <div class="abas">
+    <button id="abaFonte" class="ativa">Apostilas (material_fonte)</button>
+    <button id="abaQuestoes">Questões prontas (banco_real/simulado)</button>
+  </div>
+
+  <div class="painel" id="painelFonte">
+    <div class="filtros">
+      <div>
+        <label>Concurso</label>
+        <select id="filtroConcursoFonte">
+          <option value="">Todos</option>
+          <option>BB</option><option>INSS</option><option>TJSP</option>
+          <option>CEF</option><option>PETR</option><option>MPSP-OP</option>
+        </select>
+      </div>
+    </div>
+    <div class="tabela-scroll">
+      <table id="tabelaFonte">
+        <thead><tr>
+          <th><input type="checkbox" id="marcarTodosFonte"></th>
+          <th>Concurso</th><th>Matéria</th><th>Tema</th><th>Ordem</th><th>Página</th>
+          <th>Tamanho</th><th>Arquivo</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="acoes-lista">
+      <span id="contagemFonte" style="font-size:12px;color:var(--texto-suave)"></span>
+      <button class="vermelho" id="btnExcluirFonte" disabled>Excluir selecionados</button>
+    </div>
+    <div id="mensagemFonte"></div>
+  </div>
+
+  <div class="painel oculto" id="painelQuestoes">
+    <div class="filtros">
+      <div>
+        <label>Concurso</label>
+        <select id="filtroConcursoQuestoes">
+          <option>BB</option><option>INSS</option><option>TJSP</option>
+          <option>CEF</option><option>PETR</option><option>MPSP-OP</option>
+        </select>
+      </div>
+      <div>
+        <label>Origem</label>
+        <select id="filtroOrigem">
+          <option value="">Todas</option>
+          <option value="banco_real">banco_real</option>
+          <option value="simulado_migrado">simulado_migrado</option>
+        </select>
+      </div>
+      <div>
+        <label>Status</label>
+        <select id="filtroStatus">
+          <option value="">Todos</option>
+          <option value="pendente_revisao">pendente_revisao</option>
+          <option value="aprovada">aprovada</option>
+          <option value="rejeitada">rejeitada</option>
+        </select>
+      </div>
+    </div>
+    <div class="tabela-scroll">
+      <table id="tabelaQuestoes">
+        <thead><tr>
+          <th><input type="checkbox" id="marcarTodosQuestoes"></th>
+          <th>Concurso</th><th>Matéria</th><th>Origem</th><th>Formato</th>
+          <th>Status</th><th>Enunciado</th>
+        </tr></thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div class="acoes-lista">
+      <span id="contagemQuestoes" style="font-size:12px;color:var(--texto-suave)"></span>
+      <button class="vermelho" id="btnExcluirQuestoes" disabled>Excluir selecionados</button>
+    </div>
+    <div id="mensagemQuestoes"></div>
+  </div>
+</div>
+
+<script>
+  const TIPOS_MATERIA_OBRIGATORIA = ['apostila_unica', 'apostila_docx_heading'];
+  const TIPOS_MATERIA_OCULTA = ['apostila_combinada', 'simulado_antigo'];
+
+  const selecaoFonte = new Set();
+  const selecaoQuestoes = new Set();
+  let ultimaPreview = null;
+
+  function mostrarMensagem(elId, texto, tipo) {
+    const el = document.getElementById(elId);
+    el.className = 'mensagem ' + (tipo || '');
+    el.textContent = texto;
+  }
+
+  function atualizarCamposTipo() {
+    const tipo = document.getElementById('tipo').value;
+    document.getElementById('labelMateria').classList.toggle('oculto', TIPOS_MATERIA_OCULTA.includes(tipo));
+    document.getElementById('materia').classList.toggle('oculto', TIPOS_MATERIA_OCULTA.includes(tipo));
+    document.getElementById('materia').required = TIPOS_MATERIA_OBRIGATORIA.includes(tipo);
+    document.getElementById('areaOrigem').classList.toggle('oculto', tipo !== 'simulado_antigo');
+  }
+  document.getElementById('tipo').addEventListener('change', atualizarCamposTipo);
+  atualizarCamposTipo();
+
+  document.getElementById('formPreview').addEventListener('submit', async (evento) => {
+    evento.preventDefault();
+    mostrarMensagem('mensagemPreview', '');
+    const arquivo = document.getElementById('arquivo').files[0];
+    if (!arquivo) return;
+    const dados = new FormData();
+    dados.append('file', arquivo);
+    dados.append('tipo', document.getElementById('tipo').value);
+    dados.append('concurso', document.getElementById('concurso').value.trim());
+    const materia = document.getElementById('materia').value.trim();
+    if (materia) dados.append('materia', materia);
+    const origemSelecionada = document.querySelector('input[name=origem]:checked');
+    if (origemSelecionada) dados.append('origem', origemSelecionada.value);
+
+    try {
+      const resposta = await fetch('/api/material/preview', { method: 'POST', body: dados });
+      const corpo = await resposta.json();
+      if (!resposta.ok) {
+        mostrarMensagem('mensagemPreview', corpo.detail || 'Erro ao pré-visualizar.', 'erro');
+        return;
+      }
+      ultimaPreview = corpo;
+      renderizarPreview(corpo);
+    } catch (erro) {
+      mostrarMensagem('mensagemPreview', 'Erro de conexão ao pré-visualizar.', 'erro');
+    }
+  });
+
+  function renderizarPreview(corpo) {
+    document.getElementById('areaPreview').classList.remove('oculto');
+    document.getElementById('resumoPreview').textContent =
+      `${corpo.total} registro(s) extraído(s), destino: ${corpo.tabela === 'material_fonte' ? 'material_fonte' : 'questoes'}.`;
+
+    const tabela = document.getElementById('tabelaPreview');
+    const ehFonte = corpo.tabela === 'material_fonte';
+    const colunas = ehFonte
+      ? ['materia', 'tema', 'ordem', 'pagina', 'tamanho_trecho']
+      : ['materia', 'tema', 'formato', 'gabarito', 'enunciado'];
+    tabela.querySelector('thead').innerHTML =
+      '<tr>' + colunas.map((c) => `<th>${c}</th>`).join('') + '</tr>';
+    tabela.querySelector('tbody').innerHTML = corpo.resumo.map((linha) =>
+      '<tr>' + colunas.map((c) => `<td>${linha[c] ?? ''}</td>`).join('') + '</tr>'
+    ).join('');
+
+    const falhasEl = document.getElementById('falhasPreview');
+    if (corpo.falhas && corpo.falhas.length) {
+      falhasEl.classList.remove('oculto');
+      falhasEl.textContent = `${corpo.falhas.length} falha(s) na extração: ` +
+        corpo.falhas.map((f) => `#${f.numero} (${f.motivo})`).join('; ');
+    } else {
+      falhasEl.classList.add('oculto');
+    }
+  }
+
+  document.getElementById('btnCancelarPreview').addEventListener('click', () => {
+    document.getElementById('areaPreview').classList.add('oculto');
+    ultimaPreview = null;
+  });
+
+  document.getElementById('btnConfirmar').addEventListener('click', async () => {
+    if (!ultimaPreview) return;
+    try {
+      const resposta = await fetch('/api/material/confirmar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ preview_id: ultimaPreview.preview_id }),
+      });
+      const corpo = await resposta.json();
+      if (!resposta.ok) {
+        mostrarMensagem('mensagemPreview', corpo.detail || 'Erro ao salvar.', 'erro');
+        return;
+      }
+      mostrarMensagem('mensagemPreview', `${corpo.inseridos} inserido(s), ${corpo.duplicados} já existiam.`, 'sucesso');
+      document.getElementById('areaPreview').classList.add('oculto');
+      document.getElementById('formPreview').reset();
+      if (ultimaPreview.tabela === 'material_fonte') carregarFonte(); else carregarQuestoes();
+      ultimaPreview = null;
+    } catch (erro) {
+      mostrarMensagem('mensagemPreview', 'Erro de conexão ao salvar.', 'erro');
+    }
+  });
+
+  function baixarBackup(linhas) {
+    const blob = new Blob([JSON.stringify(linhas, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const carimbo = new Date().toISOString().replace(/[:.]/g, '-');
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `backup-exclusao-${carimbo}.json`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function carregarFonte() {
+    selecaoFonte.clear();
+    const concurso = document.getElementById('filtroConcursoFonte').value;
+    const params = new URLSearchParams();
+    if (concurso) params.set('concurso', concurso);
+    const resposta = await fetch('/api/material/fonte?' + params.toString());
+    const corpo = await resposta.json();
+    const tbody = document.querySelector('#tabelaFonte tbody');
+    tbody.innerHTML = corpo.linhas.map((linha) => `
+      <tr>
+        <td><input type="checkbox" data-id="${linha.id}"></td>
+        <td>${linha.concurso}</td><td>${linha.materia}</td><td>${linha.tema}</td>
+        <td>${linha.ordem}</td><td>${linha.pagina ?? ''}</td>
+        <td>${linha.tamanho_trecho}</td><td>${linha.arquivo_origem}</td>
+      </tr>`).join('');
+    document.getElementById('contagemFonte').textContent = `${corpo.linhas.length} linha(s)`;
+    tbody.querySelectorAll('input[type=checkbox]').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const id = Number(cb.dataset.id);
+        if (cb.checked) selecaoFonte.add(id); else selecaoFonte.delete(id);
+        document.getElementById('btnExcluirFonte').disabled = selecaoFonte.size === 0;
+        document.getElementById('btnExcluirFonte').textContent = `Excluir selecionados (${selecaoFonte.size})`;
+      });
+    });
+    document.getElementById('btnExcluirFonte').disabled = true;
+    document.getElementById('btnExcluirFonte').textContent = 'Excluir selecionados';
+  }
+
+  async function carregarQuestoes() {
+    selecaoQuestoes.clear();
+    const params = new URLSearchParams();
+    const concurso = document.getElementById('filtroConcursoQuestoes').value;
+    const origem = document.getElementById('filtroOrigem').value;
+    const status = document.getElementById('filtroStatus').value;
+    if (concurso) params.set('concurso', concurso);
+    if (origem) params.set('origem', origem);
+    if (status) params.set('status', status);
+    const resposta = await fetch('/api/material/questoes?' + params.toString());
+    const corpo = await resposta.json();
+    const tbody = document.querySelector('#tabelaQuestoes tbody');
+    tbody.innerHTML = corpo.linhas.map((linha) => `
+      <tr>
+        <td><input type="checkbox" data-id="${linha.id}"></td>
+        <td>${linha.concurso}</td><td>${linha.materia}</td><td>${linha.origem}</td>
+        <td>${linha.formato ?? ''}</td><td>${linha.status}</td><td>${linha.enunciado}</td>
+      </tr>`).join('');
+    document.getElementById('contagemQuestoes').textContent = `${corpo.linhas.length} linha(s)`;
+    tbody.querySelectorAll('input[type=checkbox]').forEach((cb) => {
+      cb.addEventListener('change', () => {
+        const id = Number(cb.dataset.id);
+        if (cb.checked) selecaoQuestoes.add(id); else selecaoQuestoes.delete(id);
+        document.getElementById('btnExcluirQuestoes').disabled = selecaoQuestoes.size === 0;
+        document.getElementById('btnExcluirQuestoes').textContent = `Excluir selecionados (${selecaoQuestoes.size})`;
+      });
+    });
+    document.getElementById('btnExcluirQuestoes').disabled = true;
+    document.getElementById('btnExcluirQuestoes').textContent = 'Excluir selecionados';
+  }
+
+  document.getElementById('filtroConcursoFonte').addEventListener('change', carregarFonte);
+  document.getElementById('filtroConcursoQuestoes').addEventListener('change', carregarQuestoes);
+  document.getElementById('filtroOrigem').addEventListener('change', carregarQuestoes);
+  document.getElementById('filtroStatus').addEventListener('change', carregarQuestoes);
+
+  document.getElementById('marcarTodosFonte').addEventListener('change', (e) => {
+    document.querySelectorAll('#tabelaFonte tbody input[type=checkbox]').forEach((cb) => {
+      cb.checked = e.target.checked;
+      cb.dispatchEvent(new Event('change'));
+    });
+  });
+  document.getElementById('marcarTodosQuestoes').addEventListener('change', (e) => {
+    document.querySelectorAll('#tabelaQuestoes tbody input[type=checkbox]').forEach((cb) => {
+      cb.checked = e.target.checked;
+      cb.dispatchEvent(new Event('change'));
+    });
+  });
+
+  document.getElementById('btnExcluirFonte').addEventListener('click', async () => {
+    const ids = [...selecaoFonte];
+    if (!ids.length || !confirm(`Isso vai apagar permanentemente ${ids.length} trecho(s) de material_fonte. Confirma?`)) return;
+    const resposta = await fetch('/api/material/fonte/excluir', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }),
+    });
+    const corpo = await resposta.json();
+    if (!resposta.ok) { mostrarMensagem('mensagemFonte', corpo.detail || 'Erro ao excluir.', 'erro'); return; }
+    baixarBackup(corpo.apagadas);
+    mostrarMensagem('mensagemFonte', `${corpo.apagadas.length} linha(s) apagada(s). Backup baixado.`, 'sucesso');
+    carregarFonte();
+  });
+
+  document.getElementById('btnExcluirQuestoes').addEventListener('click', async () => {
+    const ids = [...selecaoQuestoes];
+    if (!ids.length || !confirm(`Isso vai apagar permanentemente ${ids.length} questão(ões). Confirma?`)) return;
+    const resposta = await fetch('/api/material/questoes/excluir', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ids }),
+    });
+    const corpo = await resposta.json();
+    if (!resposta.ok) { mostrarMensagem('mensagemQuestoes', corpo.detail || 'Erro ao excluir.', 'erro'); return; }
+    baixarBackup(corpo.apagadas);
+    mostrarMensagem('mensagemQuestoes', `${corpo.apagadas.length} linha(s) apagada(s). Backup baixado.`, 'sucesso');
+    carregarQuestoes();
+  });
+
+  document.getElementById('abaFonte').addEventListener('click', () => {
+    document.getElementById('abaFonte').classList.add('ativa');
+    document.getElementById('abaQuestoes').classList.remove('ativa');
+    document.getElementById('painelFonte').classList.remove('oculto');
+    document.getElementById('painelQuestoes').classList.add('oculto');
+  });
+  document.getElementById('abaQuestoes').addEventListener('click', () => {
+    document.getElementById('abaQuestoes').classList.add('ativa');
+    document.getElementById('abaFonte').classList.remove('ativa');
+    document.getElementById('painelQuestoes').classList.remove('oculto');
+    document.getElementById('painelFonte').classList.add('oculto');
+  });
+
+  carregarFonte();
+  carregarQuestoes();
+</script>
+</body>
+</html>

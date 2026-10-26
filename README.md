@@ -19,7 +19,7 @@ Protótipo do banco de questões central descrito no `BRIEFING - IA CONTEUDISTA`
 - `parser/parse_apostila.py` — Fase 1: extrai matéria/tema/trecho/página de uma apostila PDF.
   Uso: `python parse_apostila.py <caminho_pdf> <concurso> <arquivo_origem> <saida.json>`
 - `geracao/gerar_questao.py` — Fase 2 + 3: puxa um trecho do `material_fonte`, gera 1 questão
-  via OpenAI (`--model` padrão `gpt-4.1`) e grava em `questoes`, com validação determinística
+  via OpenAI (`--model` padrão `gpt-5.1`) e grava em `questoes`, com validação determinística
   da citação legal (substring literal do trecho, não outra LLM como juiz).
   Suporta dois produtos via `--produto`:
   - `mestre_questoes` (padrão): certo_errado, citação obrigatória.

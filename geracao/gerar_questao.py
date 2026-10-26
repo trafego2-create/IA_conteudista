@@ -15,7 +15,7 @@ def main():
     parser.add_argument('--produto', choices=list(PRODUTOS), default='mestre_questoes')
     parser.add_argument('--materia', required=True)
     parser.add_argument('--tema', required=True)
-    parser.add_argument('--model', default='gpt-4.1')
+    parser.add_argument('--model', default='gpt-5.1')
     args = parser.parse_args()
 
     try:

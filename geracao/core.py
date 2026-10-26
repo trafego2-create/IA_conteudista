@@ -525,7 +525,7 @@ def formatar_instrucoes_extra(instrucoes: str) -> str:
 
 
 def gerar_questao(
-    materia: str, tema: str, produto: str = 'mestre_questoes', model: str = 'gpt-4.1',
+    materia: str, tema: str, produto: str = 'mestre_questoes', model: str = 'gpt-5.1',
     concurso: str = None, formato: str = None, instrucoes: str = None,
 ) -> dict:
     if produto not in PRODUTOS:
@@ -674,7 +674,7 @@ def listar_materias_geracao(concurso: str) -> list:
 
 
 def gerar_lote(
-    concurso: str, quantidade: int, produto: str = 'mestre_questoes', model: str = 'gpt-4.1',
+    concurso: str, quantidade: int, produto: str = 'mestre_questoes', model: str = 'gpt-5.1',
     formato: str = None, materia: str = None, instrucoes: str = None,
 ) -> dict:
     """Gera `quantidade` questoes novas via IA, uma por tema em round-robin. Nunca reaproveita -

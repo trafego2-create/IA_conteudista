@@ -276,7 +276,7 @@ class GerarRequest(BaseModel):
     materia: str
     tema: str
     produto: str = 'mestre_questoes'
-    model: str = 'gpt-4.1'
+    model: str = 'gpt-5.1'
 
 
 class RevisaoRequest(BaseModel):
@@ -292,7 +292,7 @@ class Mensagem(BaseModel):
 
 class ChatRequest(BaseModel):
     mensagens: list[Mensagem]
-    model: str = 'gpt-4.1'
+    model: str = 'gpt-5.1'
 
 
 @app.get('/health')

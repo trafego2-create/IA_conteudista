@@ -234,12 +234,16 @@ def normalizar_gabarito(formato, gabarito_bruto, alternativas):
     return None
 
 
-def parse_mq_digital(path, concurso=None, materia=None):
+def parse_mq_digital(path, concurso=None, materia=None, arquivo_origem=None):
+    """`arquivo_origem` eh o nome original do arquivo (pro caso de `path` ser um
+    caminho temporario, ex.: upload via /material, onde o nome em disco nao tem
+    nenhuma relacao com o nome que o usuario enviou)."""
+    nome_origem = arquivo_origem or os.path.basename(path)
     if concurso is None or materia is None:
-        f_concurso, f_materia = parse_filename(path)
+        f_concurso, f_materia = parse_filename(nome_origem)
         concurso = concurso or f_concurso
         materia = materia or f_materia
-    arquivo_origem = os.path.basename(path)
+    arquivo_origem = nome_origem
 
     full_text = load_text(path)
     sumario_text, body = split_sumario_and_body(full_text)

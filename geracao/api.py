@@ -399,7 +399,9 @@ def _rodar_parser(tipo: str, caminho: str, concurso: str, materia: str, arquivo_
             raise HTTPException(status_code=400, detail='materia e obrigatoria pra esse tipo')
         return 'material_fonte', parse_apostila_docx_por_heading(caminho, concurso, materia, arquivo_origem), []
     if tipo == 'mq_digital':
-        registros, falhas = parse_mq_digital(caminho, concurso, materia or None)
+        if not materia:
+            raise HTTPException(status_code=400, detail='materia e obrigatoria pra esse tipo')
+        registros, falhas = parse_mq_digital(caminho, concurso, materia, arquivo_origem)
         return 'questoes', registros, falhas
     if tipo == 'simulado_antigo':
         registros, falhas = parse_simulado(caminho, concurso, arquivo_origem, origem=origem or 'simulado_migrado')

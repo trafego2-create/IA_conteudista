@@ -547,10 +547,37 @@ def gerar_questao(
     if concurso:
         consulta_fonte = consulta_fonte.ilike('concurso', resolver_concurso(concurso))
     fonte = consulta_fonte.limit(1).execute()
-    if not fonte.data:
-        raise MaterialNaoEncontrado(f'nenhum material_fonte para materia={materia!r} tema={tema!r}')
-    registro = fonte.data[0]
-    trecho = registro['trecho']
+    if fonte.data:
+        registro = fonte.data[0]
+        trecho = registro['trecho']
+    else:
+        # sem apostila cadastrada pra essa materia/tema (ex.: Direito Penal do TJSP, que so
+        # tem banco de questoes prontas) - cai pro banco_real como fonte, usando
+        # enunciado+gabarito+comentario como "trecho". Comentario de questao real de banca ja
+        # costuma trazer citacao literal de lei, igual apostila, entao a exigencia de citacao
+        # (validar_citacao) continua valendo igual. Sorteia entre as candidatas pra nao gerar
+        # sempre em cima da mesma questao quando ha varias da mesma materia/tema.
+        consulta_real = (
+            supabase.table('questoes').select('*')
+            .eq('origem', 'banco_real').eq('materia', materia).eq('tema', tema)
+        )
+        if concurso:
+            consulta_real = consulta_real.ilike('concurso', resolver_concurso(concurso))
+        reais = consulta_real.execute().data
+        if not reais:
+            raise MaterialNaoEncontrado(
+                f'nenhum material_fonte nem questao banco_real para materia={materia!r} tema={tema!r}'
+            )
+        registro_real = random.choice(reais)
+        registro = {
+            'concurso': registro_real['concurso'], 'materia': registro_real['materia'],
+            'tema': registro_real['tema'], 'arquivo_origem': registro_real['arquivo_origem'],
+        }
+        trecho = (
+            f"Enunciado: {registro_real['enunciado']}\n"
+            f"Gabarito: {registro_real['gabarito']}\n"
+            f"Comentário: {registro_real['comentario']}"
+        )
 
     exemplo_calibracao = buscar_exemplo_calibracao(supabase, registro['concurso'], registro['materia'], formato_resolvido)
 
@@ -635,6 +662,10 @@ def gerar_questao(
 
 
 def listar_temas(concurso: str) -> list[tuple]:
+    """Materia/tema distintos usados como fonte de geracao do concurso: prioriza material_fonte
+    (apostila/teoria, mantem a ordem do sumario), com fallback pra questoes de banco_real quando
+    a materia/tema nao tem apostila cadastrada (ex.: Direito Penal do TJSP, que so tem banco de
+    questoes prontas - ver fallback espelhado em gerar_questao)."""
     supabase = get_supabase()
     resultado = (
         supabase.table('material_fonte')
@@ -644,8 +675,6 @@ def listar_temas(concurso: str) -> list[tuple]:
         .order('ordem')
         .execute()
     )
-    if not resultado.data:
-        raise MaterialNaoEncontrado(f'nenhum material_fonte para concurso={concurso!r}')
 
     vistos = set()
     temas = []
@@ -654,15 +683,33 @@ def listar_temas(concurso: str) -> list[tuple]:
         if chave not in vistos:
             vistos.add(chave)
             temas.append(chave)
+
+    resultado_real = (
+        supabase.table('questoes')
+        .select('materia, tema')
+        .eq('origem', 'banco_real')
+        .ilike('concurso', resolver_concurso(concurso))
+        .execute()
+    )
+    for linha in resultado_real.data:
+        chave = (linha['materia'], linha.get('tema'))
+        if chave[1] and chave not in vistos:
+            vistos.add(chave)
+            temas.append(chave)
+
+    if not temas:
+        raise MaterialNaoEncontrado(f'nenhum material_fonte nem questoes banco_real para concurso={concurso!r}')
     return temas
 
 
 def listar_materias_geracao(concurso: str) -> list:
-    """Nomes de materia distintos no material_fonte do concurso (fonte usada pra geracao via
-    IA) - diferente de listar_materias, que e sourced de questoes ja aprovadas (usado pra
-    simulado). Usado pelo assistente quando o pedido de geracao menciona uma materia/bloco
-    especifico, pra descobrir o nome exato salvo no banco (ex.: usuario pede 'Bloco I', o nome
-    real e 'Op Bloco I')."""
+    """Nomes de materia distintos disponiveis como fonte de geracao via IA do concurso -
+    material_fonte (apostila/teoria), com fallback pra questoes de banco_real quando a materia
+    so tem banco de questoes prontas cadastrado, sem apostila (ver mesmo fallback em
+    listar_temas/gerar_questao). Diferente de listar_materias, que e sourced de questoes ja
+    aprovadas (usado pra simulado). Usado pelo assistente quando o pedido de geracao menciona
+    uma materia/bloco especifico, pra descobrir o nome exato salvo no banco (ex.: usuario pede
+    'Bloco I', o nome real e 'Op Bloco I')."""
     supabase = get_supabase()
     resultado = (
         supabase.table('material_fonte')
@@ -670,7 +717,18 @@ def listar_materias_geracao(concurso: str) -> list:
         .ilike('concurso', resolver_concurso(concurso))
         .execute()
     )
-    return sorted({linha['materia'] for linha in resultado.data})
+    materias = {linha['materia'] for linha in resultado.data}
+
+    resultado_real = (
+        supabase.table('questoes')
+        .select('materia')
+        .eq('origem', 'banco_real')
+        .ilike('concurso', resolver_concurso(concurso))
+        .execute()
+    )
+    materias |= {linha['materia'] for linha in resultado_real.data}
+
+    return sorted(materias)
 
 
 def gerar_lote(

@@ -110,7 +110,17 @@ REGRAS OBRIGATÓRIAS:
    pra número inteiro solto, letra isolada ou unidade de medida simples (ex.: 10, 50 kg, 20
    m/s) - só pra fórmula/equação/fração/matriz/expressão que realmente precise de formatação
    especial. Texto plano nesses casos simples.
-6. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON. O campo
+6. O texto gerado vai direto para o aluno, que NÃO vê o TRECHO. Nunca mencione "trecho",
+   "texto fornecido", "texto apresentado", "material", "o comentário" ou qualquer referência à
+   fonte que você recebeu - nem no enunciado, nem no comentário. Escreva como texto autônomo e
+   atribua cada citação à norma de onde ela vem, quando o TRECHO identificar o dispositivo
+   (ex.: 'Conforme o art. 317 do Código Penal: "..."'). Se o TRECHO não identificar o
+   dispositivo, transcreva entre aspas sem inventar número de artigo. O enunciado nomeia o
+   crime/instituto (ex.: "o crime de corrupção passiva"), nunca "o artigo indicado", "o
+   dispositivo citado" ou "o crime descrito".
+7. O "enunciado" traz só a afirmação a ser julgada: sem "( ) Certo ( ) Errado", sem marcação de
+   resposta e sem frases como "a afirmação está correta" ou "julgue o item".
+8. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON. O campo
    "resolucao" vem ANTES de "gabarito" no JSON - preencha nessa ordem.
 
 FORMATO DE SAÍDA (JSON):
@@ -173,7 +183,17 @@ REGRAS OBRIGATÓRIAS:
    pra número inteiro solto, letra isolada ou unidade de medida simples (ex.: 10, 50 kg, 20
    m/s) - só pra fórmula/equação/fração/matriz/expressão que realmente precise de formatação
    especial. Texto plano nesses casos simples.
-7. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON. O campo
+7. O texto gerado vai direto para o aluno, que NÃO vê o TRECHO. Nunca mencione "trecho",
+   "texto fornecido", "texto apresentado", "material", "o comentário" ou qualquer referência à
+   fonte que você recebeu - nem no enunciado, nem nas alternativas, nem no comentário. Escreva
+   como texto autônomo e atribua cada citação à norma de onde ela vem, quando o TRECHO
+   identificar o dispositivo (ex.: 'Conforme o art. 317 do Código Penal: "..."'). Se o TRECHO
+   não identificar o dispositivo, transcreva entre aspas sem inventar número de artigo. O
+   enunciado nomeia o crime/instituto (ex.: "o crime de corrupção passiva"), nunca "o artigo
+   indicado", "o dispositivo citado" ou "o crime descrito".
+8. O "enunciado" traz só o comando da questão: as alternativas ficam apenas no campo
+   "alternativas", sem marcação de resposta no enunciado.
+9. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON. O campo
    "resolucao" vem ANTES de "alternativas" e "gabarito" no JSON - preencha nessa ordem.
 
 FORMATO DE SAÍDA (JSON):
@@ -233,7 +253,10 @@ REGRAS OBRIGATÓRIAS:
    com colchetes, usando \\begin{bmatrix} a & b \\\\ c & d \\end{bmatrix}. NÃO use LaTeX pra
    número inteiro solto, letra isolada ou unidade de medida simples (ex.: 10, 50 kg, 20 m/s) -
    só pra fórmula/equação/fração/matriz/expressão que realmente precise de formatação especial.
-5. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON.
+5. O flashcard vai direto para o aluno, que NÃO vê o TRECHO. Nunca mencione "trecho", "texto
+   fornecido", "material" ou qualquer referência à fonte que você recebeu. Atribua a citação à
+   norma de onde ela vem quando o TRECHO identificar o dispositivo.
+6. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON.
 
 FORMATO DE SAÍDA (JSON):
 {
@@ -524,6 +547,25 @@ def formatar_instrucoes_extra(instrucoes: str) -> str:
     return BLOCO_INSTRUCOES_EXTRA.format(instrucoes=instrucoes.strip())
 
 
+# so expressoes que nao tem uso legitimo numa questao - "no trecho do texto" e normal em
+# questao de Portugues, entao "trecho" sozinho nao entra
+REFERENCIA_FONTE_INTERNA = re.compile(
+    r'\b(?:trecho|texto) (?:fornecido|apresentado|transcrito)\b|\bo trecho (?:informa|indica|descreve)\b'
+    r'|\b(?:descrit[oa]|mencionad[oa]|citad[oa]) no (?:trecho|coment[aá]rio)\b'
+    r'|\bo coment[aá]rio (?:apresentado|citado|normativo)\b|\bconforme o coment[aá]rio\b'
+    r'|\b(?:artigo|dispositivo) (?:indicado|mencionado|citado|em coment[oa])\b',
+    re.IGNORECASE,
+)
+
+
+def cita_fonte_interna(questao: dict) -> str:
+    """Primeira expressao que denuncia a fonte interna (o aluno nao ve o TRECHO), ou ''."""
+    partes = [questao.get('enunciado'), questao.get('comentario'), questao.get('resposta')]
+    partes += list((questao.get('alternativas') or {}).values())
+    m = REFERENCIA_FONTE_INTERNA.search(' '.join(p for p in partes if p))
+    return m.group(0) if m else ''
+
+
 def gerar_questao(
     materia: str, tema: str, produto: str = 'mestre_questoes', model: str = 'gpt-5.1',
     concurso: str = None, formato: str = None, instrucoes: str = None,
@@ -552,18 +594,18 @@ def gerar_questao(
         trecho = registro['trecho']
     else:
         # sem apostila cadastrada pra essa materia/tema (ex.: Direito Penal do TJSP, que so
-        # tem banco de questoes prontas) - cai pro banco_real como fonte, usando
-        # enunciado+gabarito+comentario como "trecho". Comentario de questao real de banca ja
-        # costuma trazer citacao literal de lei, igual apostila, entao a exigencia de citacao
-        # (validar_citacao) continua valendo igual. Sorteia entre as candidatas pra nao gerar
-        # sempre em cima da mesma questao quando ha varias da mesma materia/tema.
+        # tem banco de questoes prontas) - cai pro banco_real como fonte, usando so o
+        # comentario como "trecho": e onde fica a citacao literal de lei. Mandar tambem
+        # enunciado/gabarito rotulados fazia o modelo escrever "o comentario"/"o enredo
+        # descreve que Joana..." no texto que vai pro aluno. Sorteia entre as candidatas pra nao
+        # gerar sempre em cima da mesma questao quando ha varias da mesma materia/tema.
         consulta_real = (
             supabase.table('questoes').select('*')
             .eq('origem', 'banco_real').eq('materia', materia).eq('tema', tema)
         )
         if concurso:
             consulta_real = consulta_real.ilike('concurso', resolver_concurso(concurso))
-        reais = consulta_real.execute().data
+        reais = [r for r in consulta_real.execute().data if r.get('comentario')]
         if not reais:
             raise MaterialNaoEncontrado(
                 f'nenhum material_fonte nem questao banco_real para materia={materia!r} tema={tema!r}'
@@ -573,11 +615,7 @@ def gerar_questao(
             'concurso': registro_real['concurso'], 'materia': registro_real['materia'],
             'tema': registro_real['tema'], 'arquivo_origem': registro_real['arquivo_origem'],
         }
-        trecho = (
-            f"Enunciado: {registro_real['enunciado']}\n"
-            f"Gabarito: {registro_real['gabarito']}\n"
-            f"Comentário: {registro_real['comentario']}"
-        )
+        trecho = registro_real['comentario']
 
     exemplo_calibracao = buscar_exemplo_calibracao(supabase, registro['concurso'], registro['materia'], formato_resolvido)
 
@@ -591,15 +629,21 @@ def gerar_questao(
         # mesmo vies do abcde: sem sorteio o modelo tende a montar so "pegadinha" (gabarito ERRADO)
         user_prompt += f'\nO gabarito desta questão DEVE ser {random.choice(["CERTO", "ERRADO"])}.'
 
-    resposta = openai_client.chat.completions.create(
-        model=model,
-        response_format={'type': 'json_object'},
-        messages=[
-            {'role': 'system', 'content': config['system_prompt']},
-            {'role': 'user', 'content': user_prompt},
-        ],
-    )
-    questao = json.loads(resposta.choices[0].message.content)
+    # o prompt proibe, mas o modelo ainda escapa "o crime descrito no trecho" de vez em quando -
+    # gera de novo uma vez antes de desistir
+    for _ in range(2):
+        resposta = openai_client.chat.completions.create(
+            model=model,
+            response_format={'type': 'json_object'},
+            messages=[
+                {'role': 'system', 'content': config['system_prompt']},
+                {'role': 'user', 'content': user_prompt},
+            ],
+        )
+        questao = json.loads(resposta.choices[0].message.content)
+        cita_fonte = cita_fonte_interna(questao)
+        if not cita_fonte:
+            break
     if formato_resolvido == 'abcde':
         embaralhar_alternativas(questao)
 
@@ -628,6 +672,9 @@ def gerar_questao(
     elif not gabarito_ok:
         status = 'rejeitada'
         motivo_rejeicao = f'verificacao independente do gabarito nao bateu: {motivo_gabarito}'
+    elif cita_fonte:
+        status = 'rejeitada'
+        motivo_rejeicao = f'texto se refere a fonte interna em vez de ser autonomo: {cita_fonte!r}'
     else:
         status = 'pendente_revisao'
         motivo_rejeicao = None

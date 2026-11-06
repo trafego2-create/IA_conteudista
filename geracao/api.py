@@ -98,6 +98,11 @@ Gabarito: <Certo ou Errado>
 
 Pra questões de múltipla escolha (formato abcde), troca o bloco "( ) Certo / ( ) Errado" por
 uma alternativa por linha ("A) ...", "B) ...", etc) e o Gabarito é a letra correta.
+
+Os parênteses de "( ) Certo" e "( ) Errado" ficam SEMPRE vazios - nunca marque "(x)" na
+resposta certa (a resposta aparece só na linha "Gabarito:"). Reproduza enunciado e comentário
+exatamente como vieram da ferramenta, sem acrescentar "Certo ou errado:" nem repetir o bloco
+"( ) Certo ( ) Errado" dentro das aspas do enunciado.
 """
 
 TOOLS = [

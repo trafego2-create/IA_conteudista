@@ -204,23 +204,34 @@ def parse_comentarios(trecho):
     return out
 
 
-def split_por_reinicio(itens, numero_de):
-    """Agrupa uma sequencia em blocos, cortando sempre que o numero da questao cai
-    (reinicio de numeracao = nova secao/tema no documento de origem). Cada bloco
-    interno tem numeros proprios, sem colisao com os vizinhos."""
-    blocos = []
-    atual = []
-    anterior = None
-    for item in itens:
-        n = numero_de(item)
-        if anterior is not None and n < anterior:
-            blocos.append(atual)
-            atual = []
-        atual.append(item)
-        anterior = n
-    if atual:
-        blocos.append(atual)
-    return blocos
+def alinhar_por_numero(enunciados, comentarios):
+    """Casa enunciado com comentario pela maior subsequencia comum dos numeros, na ordem do
+    documento. A numeracao reinicia a cada secao dos dois lados, entao numero sozinho colide
+    entre secoes; e casar por bloco de secao quebra quando o PDF tem artefato que cria
+    reinicio falso (ex.: "QUESTAO 40" extraido como "4 0") ou item faltando de um lado -
+    tanto zip() posicional quanto casar bloco por sobreposicao de numeros (ignora a ordem)
+    grudavam comentarios de uma secao nas questoes de outra. Alinhamento por ordem isola o
+    item problematico: ele fica sem par e o resto segue casado. Retorna {indice_enunciado:
+    comentario}."""
+    a = [e['numero'] for e in enunciados]
+    b = [c[0] for c in comentarios]
+    n, m = len(a), len(b)
+    dp = [[0] * (m + 1) for _ in range(n + 1)]
+    for i in range(n - 1, -1, -1):
+        linha, abaixo = dp[i], dp[i + 1]
+        for j in range(m - 1, -1, -1):
+            linha[j] = abaixo[j + 1] + 1 if a[i] == b[j] else max(abaixo[j], linha[j + 1])
+    pares, i, j = {}, 0, 0
+    while i < n and j < m:
+        if a[i] == b[j] and dp[i][j] == dp[i + 1][j + 1] + 1:
+            pares[i] = comentarios[j]
+            i += 1
+            j += 1
+        elif dp[i + 1][j] >= dp[i][j + 1]:
+            i += 1
+        else:
+            j += 1
+    return pares
 
 
 def normalizar_gabarito(formato, gabarito_bruto, alternativas):
@@ -239,38 +250,6 @@ def normalizar_gabarito(formato, gabarito_bruto, alternativas):
             return letra
         return None
     return None
-
-
-def casar_blocos_por_sobreposicao(blocos_enun, blocos_coment):
-    """Casa cada bloco de enunciados com o bloco de comentarios que tem mais numeros em comum
-    (em vez de por posicao/ordem). Sem isso, uma secao espuria de 1 item (nascida de um
-    artefato de extracao do PDF - ex.: "QUESTAO 9" sem o rotulo "COMENTARIO:" no meio do texto,
-    ou "QUESTAO 40" extraido como "4 0" por causa de espacamento, virando numero 4) desalinhava
-    a ordem e fazia zip() posicional descartar um bloco INTEIRO de verdade em silencio, sem
-    nenhuma falha reportada (achado real: 40 questoes de um arquivo de 129 sumiam sem rastro).
-    Bloco de enunciado sem par vira None - cada item dentro dele ainda gera falha individual
-    (ver loop principal), em vez de desaparecer."""
-    candidatos = []
-    for i, be in enumerate(blocos_enun):
-        numeros_e = {e['numero'] for e in be}
-        for j, bc in enumerate(blocos_coment):
-            numeros_c = {c[0] for c in bc}
-            sobreposicao = len(numeros_e & numeros_c)
-            if sobreposicao:
-                candidatos.append((sobreposicao, i, j))
-    candidatos.sort(key=lambda t: -t[0])
-
-    enun_casado, coment_casado = {}, set()
-    for sobreposicao, i, j in candidatos:
-        if i in enun_casado or j in coment_casado:
-            continue
-        enun_casado[i] = j
-        coment_casado.add(j)
-
-    return [
-        (be, blocos_coment[enun_casado[i]] if i in enun_casado else None)
-        for i, be in enumerate(blocos_enun)
-    ]
 
 
 def parse_mq_digital(path, concurso=None, materia=None, arquivo_origem=None):
@@ -292,63 +271,41 @@ def parse_mq_digital(path, concurso=None, materia=None, arquivo_origem=None):
     enunciados = parse_enunciados(body)
     comentarios = parse_comentarios(comentarios_texto(body))
 
-    # A numeracao reinicia a cada secao tanto no bloco de enunciados quanto no
-    # de comentarios, mas as duas listas nem sempre tem exatamente os mesmos
-    # itens por secao (uma questao ocasionalmente falta de um lado ou do
-    # outro no PDF de origem). Casar pela posicao global faz um unico item
-    # deslocado contaminar todo o resto do arquivo. Em vez disso: quebra as
-    # duas listas em blocos por reinicio de numeracao (cada bloco = 1 secao),
-    # casa bloco com bloco na mesma ordem, e dentro de cada bloco casa por
-    # numero local (chave), que isola qualquer item faltante/sobrando so
-    # naquela secao especifica.
-    blocos_enun = split_por_reinicio(enunciados, lambda e: e['numero'])
-    blocos_coment = split_por_reinicio(comentarios, lambda c: c[0])
+    pares = alinhar_por_numero(enunciados, comentarios)
 
     registros = []
     falhas = []
 
-    if len(blocos_enun) != len(blocos_coment):
-        falhas.append({
-            'numero': None,
-            'motivo': (
-                f'numero de secoes (reinicios de numeracao) diverge entre enunciados '
-                f'({len(blocos_enun)}) e comentarios ({len(blocos_coment)}) - '
-                f'arquivo pode ter estrutura fora do padrao, revisar manualmente'
-            ),
+    for indice, e in enumerate(enunciados):
+        numero = e['numero']
+        if e['formato'] is None:
+            falhas.append({'numero': numero, 'motivo': 'formato nao identificado (nem abcde nem certo_errado)'})
+            continue
+        if indice not in pares:
+            falhas.append({'numero': numero, 'motivo': 'sem comentario/gabarito correspondente'})
+            continue
+        _, comentario, gabarito_bruto = pares[indice]
+        gabarito = normalizar_gabarito(e['formato'], gabarito_bruto, e['alternativas'])
+        if gabarito is None:
+            falhas.append({'numero': numero, 'motivo': f'gabarito bruto nao reconhecido: {gabarito_bruto!r}'})
+            continue
+
+        enunciado_completo = e['enunciado']
+        registros.append({
+            'concurso': concurso,
+            'materia': materia,
+            'tema': tema_of(e['pos'], anchors),
+            'origem': 'banco_real',
+            'formato': e['formato'],
+            'banca_ano': e['banca_ano'],
+            'texto_auxiliar': None,
+            'enunciado': enunciado_completo,
+            'alternativas': e['alternativas'],
+            'gabarito': gabarito,
+            'comentario': comentario,
+            'arquivo_origem': arquivo_origem,
+            'hash_conteudo': hashlib.sha256(enunciado_completo.encode('utf-8')).hexdigest(),
         })
-
-    for bloco_e, bloco_c in casar_blocos_por_sobreposicao(blocos_enun, blocos_coment):
-        coment_por_numero = {c[0]: (c[1], c[2]) for c in bloco_c} if bloco_c else {}
-        for e in bloco_e:
-            numero = e['numero']
-            if e['formato'] is None:
-                falhas.append({'numero': numero, 'motivo': 'formato nao identificado (nem abcde nem certo_errado)'})
-                continue
-            if numero not in coment_por_numero:
-                falhas.append({'numero': numero, 'motivo': 'sem comentario/gabarito correspondente nesta secao'})
-                continue
-            comentario, gabarito_bruto = coment_por_numero[numero]
-            gabarito = normalizar_gabarito(e['formato'], gabarito_bruto, e['alternativas'])
-            if gabarito is None:
-                falhas.append({'numero': numero, 'motivo': f'gabarito bruto nao reconhecido: {gabarito_bruto!r}'})
-                continue
-
-            enunciado_completo = e['enunciado']
-            registros.append({
-                'concurso': concurso,
-                'materia': materia,
-                'tema': tema_of(e['pos'], anchors),
-                'origem': 'banco_real',
-                'formato': e['formato'],
-                'banca_ano': e['banca_ano'],
-                'texto_auxiliar': None,
-                'enunciado': enunciado_completo,
-                'alternativas': e['alternativas'],
-                'gabarito': gabarito,
-                'comentario': comentario,
-                'arquivo_origem': arquivo_origem,
-                'hash_conteudo': hashlib.sha256(enunciado_completo.encode('utf-8')).hexdigest(),
-            })
 
     return registros, falhas
 

@@ -198,7 +198,11 @@ REGRAS OBRIGATÓRIAS:
    (ex.: 'Conforme o art. 317 do Código Penal: "..."'). Se o TRECHO não identificar o
    dispositivo, transcreva entre aspas sem inventar número de artigo. O enunciado nomeia o
    crime/instituto (ex.: "o crime de corrupção passiva"), nunca "o artigo indicado", "o
-   dispositivo citado" ou "o crime descrito".
+   dispositivo citado" ou "o crime descrito". Também nunca "o texto deixa claro", "o texto é
+   expresso", "conforme a classificação apresentada": atribua à lei, à doutrina ou ao tribunal.
+   Nas citações, use a grafia normal do texto legal: o TRECHO às vezes destaca palavras em
+   CAIXA ALTA (ex.: "Pena - DETENÇÃO"); transcreva com letras normais ("Pena - detenção"),
+   mantendo as mesmas palavras.
 7. O "enunciado" traz só a afirmação a ser julgada: sem "( ) Certo ( ) Errado", sem marcação de
    resposta e sem frases como "a afirmação está correta" ou "julgue o item".
 8. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON. O campo
@@ -271,7 +275,11 @@ REGRAS OBRIGATÓRIAS:
    identificar o dispositivo (ex.: 'Conforme o art. 317 do Código Penal: "..."'). Se o TRECHO
    não identificar o dispositivo, transcreva entre aspas sem inventar número de artigo. O
    enunciado nomeia o crime/instituto (ex.: "o crime de corrupção passiva"), nunca "o artigo
-   indicado", "o dispositivo citado" ou "o crime descrito".
+   indicado", "o dispositivo citado" ou "o crime descrito". Também nunca "o texto deixa claro",
+   "o texto é expresso", "conforme a classificação apresentada": atribua à lei, à doutrina ou ao
+   tribunal. Nas citações, use a grafia normal do texto legal: o TRECHO às vezes destaca palavras
+   em CAIXA ALTA (ex.: "Pena - DETENÇÃO"); transcreva com letras normais ("Pena - detenção"),
+   mantendo as mesmas palavras.
 8. O "enunciado" traz só o comando da questão: as alternativas ficam apenas no campo
    "alternativas", sem marcação de resposta no enunciado.
 9. Gere só um objeto JSON no formato de saída abaixo, sem texto fora do JSON. O campo
@@ -645,12 +653,26 @@ REFERENCIA_FONTE_INTERNA = re.compile(
 # alternativas: A) Não, se trata do crime previsto no art. 303"). "condutas alternativas" e uso
 # legitimo, por isso nao basta a palavra solta.
 REFERENCIA_ALTERNATIVAS = re.compile(
-    r'\boutras alternativas\b|\balternativa\s+[A-E]\b|\b[A-E]\)\s+(?:N[ãa]o|Errad|Incorret|Corret)',
+    r'\boutras alternativas\b|\balternativa\s+[A-E]\b|\b[A-E]\)\s+(?:N[ãa]o|Errad|Incorret|Corret)'
+    r'|\ba alternativa (?:erra|est[aá]|[ée] (?:incorreta|correta|errada|certa))\b',
     re.IGNORECASE,
 )
 
 
-def cita_fonte_interna(questao: dict, formato: str = None) -> str:
+# "o texto" como fonte: em Portugues/Ingles/Redacao "o texto afirma" e o texto de apoio da
+# questao (uso legitimo), entao so vale nas outras materias. Achado real (06/11, Direito Penal):
+# "O texto deixa claro que...", "Conforme a classificação apresentada".
+REFERENCIA_TEXTO_FONTE = re.compile(
+    r'\bo texto (?:deixa claro|[ée] expresso|afirma|informa|traz|menciona|apresenta|esclarece|destaca)\b'
+    r'|\bconforme o texto\b|\bclassifica[cç][aã]o apresentada\b'
+    # "crime material" e termo tecnico; so "no material"/"conforme o material" denunciam a fonte
+    r'|\bno material\b|\bconforme o material\b|\bo material (?:traz|afirma|apresenta|informa|destaca|menciona)\b',
+    re.IGNORECASE,
+)
+MATERIAS_COM_TEXTO_DE_APOIO = ('portugues', 'ingles', 'redacao', 'lingua')
+
+
+def cita_fonte_interna(questao: dict, formato: str = None, materia: str = None) -> str:
     """Primeira expressao que denuncia a fonte interna (o aluno nao ve o TRECHO), ou ''."""
     partes = [questao.get('enunciado'), questao.get('comentario'), questao.get('resposta')]
     partes += list((questao.get('alternativas') or {}).values())
@@ -658,6 +680,8 @@ def cita_fonte_interna(questao: dict, formato: str = None) -> str:
     m = REFERENCIA_FONTE_INTERNA.search(texto)
     if not m and formato == 'certo_errado':
         m = REFERENCIA_ALTERNATIVAS.search(texto)
+    if not m and materia and not _normalizar_texto(materia).startswith(MATERIAS_COM_TEXTO_DE_APOIO):
+        m = REFERENCIA_TEXTO_FONTE.search(texto)
     return m.group(0) if m else ''
 
 
@@ -739,7 +763,7 @@ def gerar_questao(
             ],
         )
         questao = json.loads(resposta.choices[0].message.content)
-        cita_fonte = cita_fonte_interna(questao, formato_resolvido)
+        cita_fonte = cita_fonte_interna(questao, formato_resolvido, registro['materia'])
         if not cita_fonte:
             break
     if formato_resolvido == 'abcde':

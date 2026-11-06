@@ -982,7 +982,8 @@ def sortear_simulado_estratificado(concurso: str, distribuicao: dict, formato: s
 # nao inventa fluxo novo.
 # =====================================================================
 
-LOTE_UPSERT = 500
+# 500 estourou statement timeout do Supabase com questoes longas (comentario + alternativas)
+LOTE_UPSERT = 100
 
 
 def listar_material_fonte(concurso: str = None, materia: str = None) -> list:
@@ -1089,10 +1090,9 @@ def excluir_questoes_curadas(ids: list) -> list:
 
 
 def inserir_questoes_curadas(registros: list) -> dict:
-    """Upsert em questoes replicando a regra de status ja usada pelos scripts:
-    banco_real sempre pendente_revisao (geracao/importar_banco_real.py); demais origens
-    (simulado_migrado) aprovada direto, exceto quando depende de imagem/figura ausente no
-    texto extraido (heuristica de geracao/importar_simulados.py, reaproveitada aqui)."""
+    """Upsert em questoes. Questao de material oficial (banco_real/simulado_migrado) ja foi
+    verificada por quem produziu o material, entao entra aprovada - exceto quando depende de
+    imagem/figura ausente no texto extraido do PDF (heuristica de importar_simulados.py)."""
     if not registros:
         return {'inseridos': 0, 'duplicados': 0}
     from importar_simulados import depende_de_imagem  # noqa: E402 (mesmo PYTHONPATH de geracao)
@@ -1100,10 +1100,7 @@ def inserir_questoes_curadas(registros: list) -> dict:
     preparados = []
     for registro in registros:
         registro = dict(registro)
-        if registro.get('origem') == 'banco_real':
-            registro['status'] = 'pendente_revisao'
-        else:
-            registro['status'] = 'pendente_revisao' if depende_de_imagem(registro) else 'aprovada'
+        registro['status'] = 'pendente_revisao' if depende_de_imagem(registro) else 'aprovada'
         preparados.append(registro)
 
     supabase = get_supabase()

@@ -234,6 +234,38 @@ def normalizar_gabarito(formato, gabarito_bruto, alternativas):
     return None
 
 
+def casar_blocos_por_sobreposicao(blocos_enun, blocos_coment):
+    """Casa cada bloco de enunciados com o bloco de comentarios que tem mais numeros em comum
+    (em vez de por posicao/ordem). Sem isso, uma secao espuria de 1 item (nascida de um
+    artefato de extracao do PDF - ex.: "QUESTAO 9" sem o rotulo "COMENTARIO:" no meio do texto,
+    ou "QUESTAO 40" extraido como "4 0" por causa de espacamento, virando numero 4) desalinhava
+    a ordem e fazia zip() posicional descartar um bloco INTEIRO de verdade em silencio, sem
+    nenhuma falha reportada (achado real: 40 questoes de um arquivo de 129 sumiam sem rastro).
+    Bloco de enunciado sem par vira None - cada item dentro dele ainda gera falha individual
+    (ver loop principal), em vez de desaparecer."""
+    candidatos = []
+    for i, be in enumerate(blocos_enun):
+        numeros_e = {e['numero'] for e in be}
+        for j, bc in enumerate(blocos_coment):
+            numeros_c = {c[0] for c in bc}
+            sobreposicao = len(numeros_e & numeros_c)
+            if sobreposicao:
+                candidatos.append((sobreposicao, i, j))
+    candidatos.sort(key=lambda t: -t[0])
+
+    enun_casado, coment_casado = {}, set()
+    for sobreposicao, i, j in candidatos:
+        if i in enun_casado or j in coment_casado:
+            continue
+        enun_casado[i] = j
+        coment_casado.add(j)
+
+    return [
+        (be, blocos_coment[enun_casado[i]] if i in enun_casado else None)
+        for i, be in enumerate(blocos_enun)
+    ]
+
+
 def parse_mq_digital(path, concurso=None, materia=None, arquivo_origem=None):
     """`arquivo_origem` eh o nome original do arquivo (pro caso de `path` ser um
     caminho temporario, ex.: upload via /material, onde o nome em disco nao tem
@@ -278,8 +310,8 @@ def parse_mq_digital(path, concurso=None, materia=None, arquivo_origem=None):
             ),
         })
 
-    for bloco_e, bloco_c in zip(blocos_enun, blocos_coment):
-        coment_por_numero = {c[0]: (c[1], c[2]) for c in bloco_c}
+    for bloco_e, bloco_c in casar_blocos_por_sobreposicao(blocos_enun, blocos_coment):
+        coment_por_numero = {c[0]: (c[1], c[2]) for c in bloco_c} if bloco_c else {}
         for e in bloco_e:
             numero = e['numero']
             if e['formato'] is None:

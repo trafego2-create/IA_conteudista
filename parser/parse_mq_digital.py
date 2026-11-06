@@ -20,6 +20,15 @@ def load_text(path):
     return '\n'.join((p.extract_text() or '') for p in reader.pages)
 
 
+NUMERO_QUEBRADO_RE = re.compile(r'(QUEST[AÃ]O\s*\d+) (\d+)(?=\s*[:.\-–])', re.IGNORECASE)
+
+
+def juntar_numero_quebrado(texto):
+    """A extracao do pypdf parte numero de questao com espaco ("QUESTAO 6 4:", "QUESTAO 0 7 -")
+    em ~1/3 dos PDFs MQ Digital - sem juntar, a 64 vira 6 e pega o comentario da 6."""
+    return NUMERO_QUEBRADO_RE.sub(r'\1\2', texto)
+
+
 def parse_filename(path):
     """'01 - INSS - MQ DIGITAL - Ética no Serviço Público.pdf' -> (INSS, Ética no Serviço Público)
     'TJSP - MQ DIGITAL - Dir Administrativo.pdf' -> (TJSP, Dir Administrativo) (sem numero de ordem)."""
@@ -263,7 +272,7 @@ def parse_mq_digital(path, concurso=None, materia=None, arquivo_origem=None):
         materia = materia or f_materia
     arquivo_origem = nome_origem
 
-    full_text = load_text(path)
+    full_text = juntar_numero_quebrado(load_text(path))
     sumario_text, body = split_sumario_and_body(full_text)
     temas = parse_sumario(sumario_text)
     anchors = locate_temas(body, temas)

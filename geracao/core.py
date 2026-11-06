@@ -504,6 +504,7 @@ def buscar_exemplo_calibracao(supabase, concurso: str, materia: str, formato: st
         supabase.table('questoes')
         .select('enunciado, gabarito, comentario')
         .eq('origem', 'banco_real')
+        .eq('status', 'aprovada')
         .eq('materia', materia)
         .eq('formato', formato)
     )
@@ -598,10 +599,12 @@ def gerar_questao(
         # comentario como "trecho": e onde fica a citacao literal de lei. Mandar tambem
         # enunciado/gabarito rotulados fazia o modelo escrever "o comentario"/"o enredo
         # descreve que Joana..." no texto que vai pro aluno. Sorteia entre as candidatas pra nao
-        # gerar sempre em cima da mesma questao quando ha varias da mesma materia/tema.
+        # gerar sempre em cima da mesma questao quando ha varias da mesma materia/tema. So
+        # aprovada: banco_real importado com parser antigo teve comentario trocado entre
+        # questoes, e pendente/rejeitada pode ser justamente uma dessas.
         consulta_real = (
             supabase.table('questoes').select('*')
-            .eq('origem', 'banco_real').eq('materia', materia).eq('tema', tema)
+            .eq('origem', 'banco_real').eq('status', 'aprovada').eq('materia', materia).eq('tema', tema)
         )
         if concurso:
             consulta_real = consulta_real.ilike('concurso', resolver_concurso(concurso))
@@ -735,6 +738,7 @@ def listar_temas(concurso: str) -> list[tuple]:
         supabase.table('questoes')
         .select('materia, tema')
         .eq('origem', 'banco_real')
+        .eq('status', 'aprovada')
         .ilike('concurso', resolver_concurso(concurso))
         .execute()
     )
@@ -770,6 +774,7 @@ def listar_materias_geracao(concurso: str) -> list:
         supabase.table('questoes')
         .select('materia')
         .eq('origem', 'banco_real')
+        .eq('status', 'aprovada')
         .ilike('concurso', resolver_concurso(concurso))
         .execute()
     )

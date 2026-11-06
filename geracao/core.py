@@ -74,6 +74,63 @@ def _materia_bate(materia_norm: str, tema_norm: str) -> bool:
     return False
 
 
+# Nome unico de cada materia. Cada fonte escrevia de um jeito (nome do arquivo MQ Digital:
+# "Dir Penal"; heading do simulado antigo: "DIREITO PENAL"; apostila: "Direito Penal") e a busca
+# por nome falhava ("sem estoque"/"sem material") mesmo com a materia existindo. Chave = nome
+# normalizado (_normalizar_texto: sem acento, minusculo, so letras/numeros). Aplicado na
+# gravacao (inserir_*) e na busca (canonizar_materia), entao tanto "RLM" quanto "Dir Penal"
+# digitados no chat continuam achando a materia.
+MATERIA_CANONICA = {
+    'dir administrativo': 'Direito Administrativo',
+    'direito administrativo': 'Direito Administrativo',
+    'dir constitucional': 'Direito Constitucional',
+    'direito constitucional': 'Direito Constitucional',
+    'direito constuticional': 'Direito Constitucional',
+    'dir pcd': 'Direito PCD',
+    'direito pcd': 'Direito PCD',
+    'dir penal': 'Direito Penal',
+    'direito penal': 'Direito Penal',
+    'dir proc civil': 'Direito Processual Civil',
+    'direito processual civil': 'Direito Processual Civil',
+    'dir proc penal': 'Direito Processual Penal',
+    'direito processual penal': 'Direito Processual Penal',
+    'portugues': 'Português',
+    'lingua portuguesa': 'Português',
+    'portugues basico': 'Português Básico',
+    'portugues avancado': 'Português Avançado',
+    'ingles': 'Inglês',
+    'lingua inglesa': 'Inglês',
+    'rlm': 'Raciocínio Lógico Matemático',
+    'raciocinio logico matematico': 'Raciocínio Lógico Matemático',
+    'raciocionio logico matematico': 'Raciocínio Lógico Matemático',
+    'raciocinio logico': 'Raciocínio Lógico',
+    'raciocionio logico': 'Raciocínio Lógico',
+    'informatica': 'Informática',
+    'matematica': 'Matemática',
+    'matematica fonte 8': 'Matemática',
+    'matematica financeira': 'Matemática Financeira',
+    'conhecimentos bancarios': 'Conhecimentos Bancários',
+    'vendas e negociacao': 'Vendas e Negociação',
+    'legislacao interna': 'Legislação Interna',
+    'redacao oficial': 'Redação Oficial',
+    'seguridade social': 'Seguridade Social',
+    'etica no servico publico': 'Ética no Serviço Público',
+    'op bloco i': 'Operação Bloco I',
+    'operacao bloco i': 'Operação Bloco I',
+    'op bloco ii': 'Operação Bloco II',
+    'operacao bloco ii': 'Operação Bloco II',
+    'op bloco iii': 'Operação Bloco III',
+    'operacao bloco iii': 'Operação Bloco III',
+}
+
+
+def canonizar_materia(materia: str) -> str:
+    """Nome unico da materia (ver MATERIA_CANONICA); nome fora do mapa volta como veio."""
+    if not materia:
+        return materia
+    return MATERIA_CANONICA.get(_normalizar_texto(materia), materia.strip())
+
+
 def _buscar_todas(consulta) -> list:
     """Executa a consulta paginando: o Supabase devolve no maximo 1000 linhas por chamada, sem
     erro nenhum. Achado real (06/11): TJSP tem 3.595 banco_real aprovadas e listar_materias*
@@ -623,6 +680,7 @@ def gerar_questao(
     supabase = get_supabase()
     openai_client = get_openai()
 
+    materia = canonizar_materia(materia)
     consulta_fonte = supabase.table('material_fonte').select('*').eq('materia', materia).eq('tema', tema)
     if concurso:
         consulta_fonte = consulta_fonte.ilike('concurso', resolver_concurso(concurso))
@@ -845,7 +903,7 @@ def gerar_lote(
     temas = listar_temas(concurso)
 
     if materia:
-        materia_norm = _normalizar_texto(materia)
+        materia_norm = _normalizar_texto(canonizar_materia(materia))
         temas_filtrados = [
             (m, t) for m, t in temas
             if _materia_bate(materia_norm, _normalizar_texto(m)) or _materia_bate(materia_norm, _normalizar_texto(t))
@@ -909,10 +967,9 @@ def _prioridade_reuso(questao: dict):
 def _candidatas_aprovadas(supabase, concurso: str, materia: str = None, formato: str = None) -> list:
     consulta = supabase.table('questoes').select('*').ilike('concurso', resolver_concurso(concurso)).eq('status', 'aprovada')
     if materia:
-        # ilike sem coringa = igualdade ignorando maiuscula/minuscula - o nome da materia
-        # digitado em linguagem natural (ex.: "direito constitucional") raramente bate
-        # exatamente a grafia salva no banco (ex.: "Direito Constitucional")
-        consulta = consulta.ilike('materia', materia)
+        # canonizar resolve abreviacao/apelido ("RLM", "Dir Penal", "Língua Portuguesa"); ilike
+        # sem coringa cobre o resto (so maiuscula/minuscula diferente)
+        consulta = consulta.ilike('materia', canonizar_materia(materia))
     if formato:
         consulta = consulta.eq('formato', formato)
     candidatas = _buscar_todas(consulta.order('id'))
@@ -1036,7 +1093,7 @@ def listar_material_fonte(concurso: str = None, materia: str = None) -> list:
     if concurso:
         consulta = consulta.ilike('concurso', concurso)
     if materia:
-        consulta = consulta.ilike('materia', materia)
+        consulta = consulta.ilike('materia', canonizar_materia(materia))
     linhas, off = [], 0
     while True:
         r = consulta.range(off, off + 999).execute()
@@ -1074,6 +1131,7 @@ def excluir_material_fonte(ids: list) -> list:
 def inserir_material_fonte(registros: list) -> dict:
     if not registros:
         return {'inseridos': 0, 'duplicados': 0}
+    registros = [{**r, 'materia': canonizar_materia(r.get('materia'))} for r in registros]
     supabase = get_supabase()
     inseridos = 0
     for i in range(0, len(registros), LOTE_UPSERT):
@@ -1100,7 +1158,7 @@ def listar_questoes_curadas(concurso: str = None, materia: str = None, origem: s
     if concurso:
         consulta = consulta.ilike('concurso', concurso)
     if materia:
-        consulta = consulta.ilike('materia', materia)
+        consulta = consulta.ilike('materia', canonizar_materia(materia))
     if status:
         consulta = consulta.eq('status', status)
     linhas, off = [], 0
@@ -1144,6 +1202,7 @@ def inserir_questoes_curadas(registros: list) -> dict:
     preparados = []
     for registro in registros:
         registro = dict(registro)
+        registro['materia'] = canonizar_materia(registro.get('materia'))
         registro['status'] = 'pendente_revisao' if depende_de_imagem(registro) else 'aprovada'
         preparados.append(registro)
 

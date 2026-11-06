@@ -7,7 +7,7 @@ from dotenv import load_dotenv
 
 load_dotenv(os.path.join(os.path.dirname(__file__), '..', '.env'))
 
-from core import get_supabase  # noqa: E402
+from core import canonizar_materia, get_supabase  # noqa: E402
 from importar_simulados import depende_de_imagem  # noqa: E402
 
 CAMPOS_TABELA = (
@@ -23,6 +23,7 @@ def carregar_registros(path):
     with open(path, encoding='utf-8') as f:
         registros = json.load(f)
     for r in registros:
+        r['materia'] = canonizar_materia(r.get('materia'))
         r['status'] = 'pendente_revisao' if depende_de_imagem(r) else 'aprovada'
     return [{k: r[k] for k in CAMPOS_TABELA} for r in registros]
 

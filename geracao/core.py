@@ -74,6 +74,30 @@ def _materia_bate(materia_norm: str, tema_norm: str) -> bool:
     return False
 
 
+def _buscar_todas(consulta) -> list:
+    """Executa a consulta paginando: o Supabase devolve no maximo 1000 linhas por chamada, sem
+    erro nenhum. Achado real (06/11): TJSP tem 3.595 banco_real aprovadas e listar_materias*
+    so enxergava 1000 - Dir Constitucional e Dir PCD sumiam da lista de materias. A consulta
+    precisa vir com order() de coluna unica (id) pra paginacao nao pular/repetir linha."""
+    linhas, off = [], 0
+    while True:
+        r = consulta.range(off, off + 999).execute()
+        linhas += r.data
+        if len(r.data) < 1000:
+            return linhas
+        off += 1000
+
+
+def _materia_tem_apostila(materia: str, materias_apostila: set) -> bool:
+    """Materia do banco_real ja coberta por apostila do material_fonte ('Dir Penal' bate com
+    'Direito Penal'). Nesse caso o banco_real nao entra como fonte de geracao: o comentario de
+    questao pronta muitas vezes nao traz o texto da lei ('Trata-se do art. 293, I') e o modelo
+    inventava o resto - e os temas tem nome diferente nos dois lugares, entao sem esse filtro
+    metade do lote continuava saindo do caminho fraco."""
+    norm = _normalizar_texto(materia or '')
+    return any(_materia_bate(norm, _normalizar_texto(m)) for m in materias_apostila)
+
+
 def resolver_concurso(concurso: str) -> str:
     return ALIAS_CONCURSO.get(_normalizar_texto(concurso), concurso)
 
@@ -559,11 +583,24 @@ REFERENCIA_FONTE_INTERNA = re.compile(
 )
 
 
-def cita_fonte_interna(questao: dict) -> str:
+# questao Certo/Errado nao tem alternativa - se falar nelas, copiou o comentario de uma questao
+# pronta de multipla escolha usada como fonte (achado real: "Verificando o erro das outras
+# alternativas: A) Não, se trata do crime previsto no art. 303"). "condutas alternativas" e uso
+# legitimo, por isso nao basta a palavra solta.
+REFERENCIA_ALTERNATIVAS = re.compile(
+    r'\boutras alternativas\b|\balternativa\s+[A-E]\b|\b[A-E]\)\s+(?:N[ãa]o|Errad|Incorret|Corret)',
+    re.IGNORECASE,
+)
+
+
+def cita_fonte_interna(questao: dict, formato: str = None) -> str:
     """Primeira expressao que denuncia a fonte interna (o aluno nao ve o TRECHO), ou ''."""
     partes = [questao.get('enunciado'), questao.get('comentario'), questao.get('resposta')]
     partes += list((questao.get('alternativas') or {}).values())
-    m = REFERENCIA_FONTE_INTERNA.search(' '.join(p for p in partes if p))
+    texto = ' '.join(p for p in partes if p)
+    m = REFERENCIA_FONTE_INTERNA.search(texto)
+    if not m and formato == 'certo_errado':
+        m = REFERENCIA_ALTERNATIVAS.search(texto)
     return m.group(0) if m else ''
 
 
@@ -644,7 +681,7 @@ def gerar_questao(
             ],
         )
         questao = json.loads(resposta.choices[0].message.content)
-        cita_fonte = cita_fonte_interna(questao)
+        cita_fonte = cita_fonte_interna(questao, formato_resolvido)
         if not cita_fonte:
             break
     if formato_resolvido == 'abcde':
@@ -717,33 +754,36 @@ def listar_temas(concurso: str) -> list[tuple]:
     a materia/tema nao tem apostila cadastrada (ex.: Direito Penal do TJSP, que so tem banco de
     questoes prontas - ver fallback espelhado em gerar_questao)."""
     supabase = get_supabase()
-    resultado = (
+    linhas_fonte = _buscar_todas(
         supabase.table('material_fonte')
         .select('materia, tema, ordem')
         .ilike('concurso', resolver_concurso(concurso))
         .order('materia')
         .order('ordem')
-        .execute()
+        .order('id')
     )
 
     vistos = set()
     temas = []
-    for linha in resultado.data:
+    for linha in linhas_fonte:
         chave = (linha['materia'], linha['tema'])
         if chave not in vistos:
             vistos.add(chave)
             temas.append(chave)
 
-    resultado_real = (
+    linhas_real = _buscar_todas(
         supabase.table('questoes')
         .select('materia, tema')
         .eq('origem', 'banco_real')
         .eq('status', 'aprovada')
         .ilike('concurso', resolver_concurso(concurso))
-        .execute()
+        .order('id')
     )
-    for linha in resultado_real.data:
+    materias_apostila = {m for m, _ in temas}
+    for linha in linhas_real:
         chave = (linha['materia'], linha.get('tema'))
+        if _materia_tem_apostila(linha['materia'], materias_apostila):
+            continue
         if chave[1] and chave not in vistos:
             vistos.add(chave)
             temas.append(chave)
@@ -762,23 +802,27 @@ def listar_materias_geracao(concurso: str) -> list:
     uma materia/bloco especifico, pra descobrir o nome exato salvo no banco (ex.: usuario pede
     'Bloco I', o nome real e 'Op Bloco I')."""
     supabase = get_supabase()
-    resultado = (
+    linhas_fonte = _buscar_todas(
         supabase.table('material_fonte')
         .select('materia')
         .ilike('concurso', resolver_concurso(concurso))
-        .execute()
+        .order('id')
     )
-    materias = {linha['materia'] for linha in resultado.data}
+    materias = {linha['materia'] for linha in linhas_fonte}
 
-    resultado_real = (
+    linhas_real = _buscar_todas(
         supabase.table('questoes')
         .select('materia')
         .eq('origem', 'banco_real')
         .eq('status', 'aprovada')
         .ilike('concurso', resolver_concurso(concurso))
-        .execute()
+        .order('id')
     )
-    materias |= {linha['materia'] for linha in resultado_real.data}
+    materias_apostila = set(materias)
+    materias |= {
+        linha['materia'] for linha in linhas_real
+        if not _materia_tem_apostila(linha['materia'], materias_apostila)
+    }
 
     return sorted(materias)
 
@@ -871,7 +915,7 @@ def _candidatas_aprovadas(supabase, concurso: str, materia: str = None, formato:
         consulta = consulta.ilike('materia', materia)
     if formato:
         consulta = consulta.eq('formato', formato)
-    candidatas = consulta.execute().data
+    candidatas = _buscar_todas(consulta.order('id'))
     candidatas.sort(key=_prioridade_reuso)
     return candidatas
 
@@ -882,8 +926,8 @@ def listar_concursos() -> list:
     usuario menciona o concurso pelo nome por extenso (ex.: 'Banco do Brasil', 'Petrobrás')
     em vez da sigla interna ('BB', 'PETR'), que e o que fica salvo no banco."""
     supabase = get_supabase()
-    resultado = supabase.table('material_fonte').select('concurso').execute()
-    return sorted({linha['concurso'] for linha in resultado.data})
+    linhas = _buscar_todas(supabase.table('material_fonte').select('concurso').order('id'))
+    return sorted({linha['concurso'] for linha in linhas})
 
 
 def listar_materias(concurso: str) -> list:
@@ -892,14 +936,14 @@ def listar_materias(concurso: str) -> list:
     simulado antes de chamar sortear_simulado_estratificado (nomes tipo 'RLM' nao sao
     obvios a partir do pedido em linguagem natural do usuario)."""
     supabase = get_supabase()
-    resultado = (
+    linhas = _buscar_todas(
         supabase.table('questoes')
         .select('materia')
         .ilike('concurso', resolver_concurso(concurso))
         .eq('status', 'aprovada')
-        .execute()
+        .order('id')
     )
-    return sorted({linha['materia'] for linha in resultado.data})
+    return sorted({linha['materia'] for linha in linhas})
 
 
 def _marcar_usadas(supabase, selecionadas: list) -> None:

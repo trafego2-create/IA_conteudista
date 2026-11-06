@@ -72,19 +72,26 @@ def split_sumario_and_body(text):
     return '\n'.join(sumario_lines), depois[body_start_offset:]
 
 
+def _padrao_espaco_flexivel(texto):
+    # heading longo quebra linha no corpo do PDF ("DOS CRIMES CONTRA A \nADMINISTRACAO PUBLICA")
+    # mas aparece numa linha so no sumario - busca literal nunca achava e o tema anterior
+    # "vazava" pra todas as questoes seguintes
+    return re.compile(r'\s+'.join(re.escape(p) for p in texto.split()))
+
+
 def locate_temas(body, temas):
     """Posicao da primeira ocorrencia de cada heading de tema no corpo, na ordem do sumario."""
     anchors = []
     search_from = 0
     for tema in temas:
-        pos = body.find(tema, search_from)
-        if pos == -1:
-            # tolera pequenas divergencias de acentuacao/espacamento: procura so pelo prefixo
+        m = _padrao_espaco_flexivel(tema).search(body, search_from)
+        if not m:
+            # tolera pequenas divergencias de acentuacao: procura so pelo prefixo
             prefix = tema[:max(8, int(len(tema) * 0.6))]
-            pos = body.find(prefix, search_from)
-        if pos != -1:
-            anchors.append((pos, tema))
-            search_from = pos + 1
+            m = _padrao_espaco_flexivel(prefix).search(body, search_from)
+        if m:
+            anchors.append((m.start(), tema))
+            search_from = m.start() + 1
     return anchors
 
 
